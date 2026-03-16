@@ -2,13 +2,18 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Install system dependencies for psycopg2 and other packages
+# Install system dependencies
 RUN apt-get update && apt-get install -y gcc libpq-dev netcat-traditional && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+# Copy requirements from the specific service
+COPY auth-service/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+# Copy shared utilities to root so sys.path.append(ROOT_DIR.parent) works
+COPY shared /shared
+
+# Copy the actual microservice code
+COPY auth-service .
 
 EXPOSE 8000
 
