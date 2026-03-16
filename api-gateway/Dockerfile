@@ -2,10 +2,10 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-COPY package*.json ./
+COPY api-gateway/package*.json ./
 RUN npm install --production
 
-COPY . .
+COPY api-gateway .
 
 EXPOSE 8000
 
