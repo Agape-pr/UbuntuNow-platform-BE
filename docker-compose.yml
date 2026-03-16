@@ -1,0 +1,159 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_MULTIPLE_DATABASES: auth_db,store_db,product_db,order_db,payment_db,notification_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-multiple-databases.sh:/docker-entrypoint-initdb.d/init-multiple-databases.sh
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "8000:8000"
+    depends_on:
+      - auth-service
+      - store-service
+      - product-service
+      - order-service
+      - payment-service
+      - notification-service
+    env_file:
+      - .env
+    environment:
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - STORE_SERVICE_URL=http://store-service:8002
+      - PRODUCT_SERVICE_URL=http://product-service:8003
+      - ORDER_SERVICE_URL=http://order-service:8004
+      - PAYMENT_SERVICE_URL=http://payment-service:8005
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8006
+
+  auth-service:
+    build: ./auth-service
+    command: >
+      sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8001"
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgres://postgres:password@db:5432/auth_db
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - STORE_SERVICE_URL=http://store-service:8002
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  store-service:
+    build: ./store-service
+    command: >
+      sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8002"
+    ports:
+      - "8002:8002"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgres://postgres:password@db:5432/store_db
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  product-service:
+    build: ./product-service
+    command: >
+      sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8003"
+    ports:
+      - "8003:8003"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgres://postgres:password@db:5432/product_db
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  order-service:
+    build: ./order-service
+    command: >
+      sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8004"
+    ports:
+      - "8004:8004"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgres://postgres:password@db:5432/order_db
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  payment-service:
+    build: ./payment-service
+    command: >
+      sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8005"
+    ports:
+      - "8005:8005"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgres://postgres:password@db:5432/payment_db
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  notification-service:
+    build: ./notification-service
+    command: >
+      sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8006"
+    ports:
+      - "8006:8006"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgres://postgres:password@db:5432/notification_db
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
