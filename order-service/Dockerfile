@@ -5,7 +5,7 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y gcc libpq-dev netcat-traditional && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements from the specific service
+# Copy requirements from the root context
 COPY order-service/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY shared /shared
 
 # Copy the actual microservice code
-COPY order-service .
+COPY order-service /app
 
 EXPOSE 8000
 
