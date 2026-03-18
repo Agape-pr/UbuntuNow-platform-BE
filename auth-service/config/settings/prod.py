@@ -18,23 +18,26 @@ if not ALLOWED_HOSTS:
         "DJANGO_ALLOWED_HOSTS must be set in production (or RAILWAY_PRIVATE_DOMAIN must exist)."
     )
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL must be set in production (Railway Postgres).")
-
-
-import dj_database_url
+# Production database configuration - must respect the schema isolation from base.py
 DATABASES = {
     'default': dj_database_url.config(
-        default=os.environ.get('DATABASE_URL', 'sqlite:///db.sqlite3'),
+        default=os.environ.get('DATABASE_URL'),
         conn_max_age=600
     )
 }
-# DATABASE_ROUTERS removed for single db per service setup
 
+# Re-apply schema isolation because dj_database_url.config might overwrite it
+schema = os.environ.get('DB_SCHEMA', 'public')
+if 'postgresql' in DATABASES['default'].get('ENGINE', ''):
+    DATABASES['default']['OPTIONS'] = {
+        'options': f'-c search_path={schema}'
+    }
 
 #  hardening for HTTPS deployments.
-SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", default=True)
+# IMPORTANT: Set to False because the API Gateway communicates with this service via HTTP.
+# SSL is handled at the Gateway edge (Vercel/Railway Public Domain).
+SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", default=False)
+
 SESSION_COOKIE_SECURE = env_bool("DJANGO_SESSION_COOKIE_SECURE", default=True)
 CSRF_COOKIE_SECURE = env_bool("DJANGO_CSRF_COOKIE_SECURE", default=True)
 
