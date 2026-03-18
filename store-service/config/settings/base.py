@@ -94,20 +94,8 @@ if 'postgresql' in DATABASES['default'].get('ENGINE', ''):
         'options': f'-c search_path={schema}'
     }
 
-# DATABASE_ROUTERS removed for single db per service setup
 
 
-# 
-
-# Uncomment for Postgres
-# import dj_database_url
-DATABASES = {
-    'default': dj_database_url.config(
-        default=os.environ.get('DATABASE_URL', 'sqlite:///db.sqlite3'),
-        conn_max_age=600
-    )
-}
-# DATABASE_ROUTERS removed for single db per service setup
 
 
 # 
