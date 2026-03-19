@@ -17,8 +17,19 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
 
     def validate(self, attrs):
+        import json
         account_type = attrs.get('account_type')
         store_data = attrs.get('store')
+
+        # If store_data is a string (because of multipart/form-data), parse it
+        if isinstance(store_data, str):
+            try:
+                store_data = json.loads(store_data)
+                attrs['store'] = store_data
+            except json.JSONDecodeError:
+                raise serializers.ValidationError({
+                    "store": "Invalid JSON format for store data."
+                })
 
         # Seller must provide store data with store_name
         if account_type == 'seller':
@@ -99,6 +110,13 @@ class UserDetailSerializer(serializers.ModelSerializer):
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        # Add custom claims
+        token['role'] = user.role
+        return token
+
     def validate(self, attrs):
         data = super().validate(attrs)
         

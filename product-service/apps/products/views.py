@@ -10,10 +10,27 @@ from .serializers import ProductSerializer, ProductCreateUpdateSerializer
 class IsSeller(permissions.BasePermission):
     """
     Allows access only to authenticated sellers.
+    We verify the role from the JWT and fetch the store_id from the store-service.
     """
 
     def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.is_seller()
+        if not request.user or not request.user.is_authenticated:
+            return False
+            
+        if not request.user.role == 'seller':
+            return False
+
+        import requests
+        import os
+        store_url = os.environ.get('STORE_SERVICE_URL', 'http://store-service:8002')
+        try:
+            res = requests.get(f"{store_url}/api/v1/users/internal/stores/{request.user.id}/", timeout=2)
+            if res.status_code == 200:
+                request.store_id = res.json().get('id')
+                return True
+        except Exception as e:
+            print(f"Error checking store permission: {e}")
+        return False
 
 
 class SellerProductViewSet(viewsets.ModelViewSet):
@@ -22,15 +39,20 @@ class SellerProductViewSet(viewsets.ModelViewSet):
     lookup_field = "id"
 
     def get_queryset(self):
+        store_id = getattr(self.request, 'store_id', None)
+        if not store_id:
+            return Product.objects.none()
+            
         return (
             Product.objects
-            .filter(store__user=self.request.user)
-            .select_related("category", "store")
+            .filter(store_id=store_id)
+            .select_related("category")
             .prefetch_related("images")
         )
 
     def perform_create(self, serializer):
-        serializer.save(store_id=self.request.user.store.id if self.request.user.store else None)
+        store_id = getattr(self.request, 'store_id', None)
+        serializer.save(store_id=store_id)
 
 
 class PublicProductViewSet(viewsets.ReadOnlyModelViewSet):
@@ -55,7 +77,7 @@ class PublicProductViewSet(viewsets.ReadOnlyModelViewSet):
         return (
             Product.objects
             .filter(is_active=True)
-            .select_related("category", "store")
+            .select_related("category")
             .prefetch_related("images")
         )
 
