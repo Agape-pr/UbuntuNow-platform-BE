@@ -34,6 +34,7 @@ const proxy = (pathPrefix, target) =>
 // Routing — order matters: more-specific paths first
 app.use(proxy('/api/v1/auth', services.auth));
 app.use(proxy('/api/v1/users/store', services.store));
+app.use(proxy('/api/v1/store', services.store));
 app.use(proxy('/api/v1/users', services.auth));
 app.use(proxy('/api/v1/products', services.product));
 app.use(proxy('/api/v1/orders', services.order));

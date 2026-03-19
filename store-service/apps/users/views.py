@@ -4,7 +4,7 @@ from rest_framework.views import APIView
 from rest_framework import status
 from .models import Store
 from .serializers import StoreSerializer, PublicStoreSerializer
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 
 class InternalStoreCreateView(APIView):
     permission_classes = [AllowAny]
@@ -29,3 +29,17 @@ class PublicStoreView(generics.RetrieveAPIView):
     serializer_class = PublicStoreSerializer
     lookup_field = 'slug'
     permission_classes = [AllowAny]
+
+class UpdateStoreView(generics.UpdateAPIView):
+    serializer_class = StoreSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        # Find the store belonging to the currently authenticated user
+        user_id = self.request.user.id
+        try:
+            return Store.objects.get(user_id=user_id)
+        except Store.DoesNotExist:
+            from rest_framework.exceptions import NotFound
+            raise NotFound("Store not found for this user.")
+
