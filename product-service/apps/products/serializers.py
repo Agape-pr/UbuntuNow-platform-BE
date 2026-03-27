@@ -15,8 +15,13 @@ class ProductImageSerializer(serializers.ModelSerializer):
 
 class ProductSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
-    store_name = serializers.CharField(read_only=True)
+    store_name = serializers.SerializerMethodField()
     images = ProductImageSerializer(many=True, read_only=True)
+
+    def get_store_name(self, obj):
+        # Microservice architecture: store name is in store-service.
+        # We can fetch this at the view level or gateway level, but for now we prevent the crash.
+        return None
 
     class Meta:
         model = Product
