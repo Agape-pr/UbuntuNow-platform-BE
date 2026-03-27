@@ -115,6 +115,18 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token = super().get_token(user)
         # Add custom claims
         token['role'] = user.role
+        
+        # Inject store_id into JWT for seller stateless auth downstream
+        if user.role == 'seller':
+            try:
+                store_url = os.environ.get('STORE_SERVICE_URL', 'http://store-service:8002')
+                # Try fetching store via internal network
+                res = requests.get(f"{store_url}/api/v1/users/internal/stores/{user.id}/", timeout=2)
+                if res.status_code == 200:
+                    token['store_id'] = res.json().get('id')
+            except Exception as e:
+                logger.error(f"Failed to append store_id to JWT: {e}")
+                
         return token
 
     def validate(self, attrs):
