@@ -64,7 +64,7 @@ class PublicProductViewSet(viewsets.ReadOnlyModelViewSet):
 
     filterset_fields = {
         "category__slug": ["exact"],
-        "store__id": ["exact"],
+        "store_id": ["exact"],
         "price": ["gte", "lte"],
     }
 
