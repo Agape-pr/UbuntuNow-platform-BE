@@ -10,26 +10,26 @@ from .serializers import ProductSerializer, ProductCreateUpdateSerializer
 class IsSeller(permissions.BasePermission):
     """
     Allows access only to authenticated sellers.
-    We verify the role from the JWT and fetch the store_id from the store-service.
+    We verify the role and fetch the store_id entirely statelessly from the JWT payload.
     """
 
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
             
-        if not request.user.role == 'seller':
+        if not getattr(request.user, 'role', None) == 'seller':
             return False
 
-        import requests
-        import os
-        store_url = os.environ.get('STORE_SERVICE_URL', 'http://store-service:8002')
-        try:
-            res = requests.get(f"{store_url}/api/v1/users/internal/stores/{request.user.id}/", timeout=2)
-            if res.status_code == 200:
-                request.store_id = res.json().get('id')
-                return True
-        except Exception as e:
-            print(f"Error checking store permission: {e}")
+        # Safely extract store_id from the stateless JWT user object
+        store = getattr(request.user, 'store', None)
+        if store and hasattr(store, 'id') and store.id:
+            request.store_id = store.id
+            return True
+        
+        # If the JWT token does not physically have the store_id payload injected, 
+        # we reject the request. The user must logout and re-login to generate a new token 
+        # using the patched auth-service.
+        print(f"Error checking store permission: Missing store_id in JWT. User {request.user.id} needs to authenticate again.")
         return False
 
 
