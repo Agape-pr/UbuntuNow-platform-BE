@@ -35,14 +35,20 @@ class IsSeller(permissions.BasePermission):
 
 class SellerProductViewSet(viewsets.ModelViewSet):
     permission_classes = [IsSeller]
-    serializer_class = ProductCreateUpdateSerializer
     lookup_field = "id"
+
+    def get_serializer_class(self):
+        # Use the write serializer for create/update actions only.
+        # Use the full read serializer (with images) for list/retrieve.
+        if self.action in ('create', 'update', 'partial_update'):
+            return ProductCreateUpdateSerializer
+        return ProductSerializer
 
     def get_queryset(self):
         store_id = getattr(self.request, 'store_id', None)
         if not store_id:
             return Product.objects.none()
-            
+
         return (
             Product.objects
             .filter(store_id=store_id)
