@@ -7,6 +7,18 @@ class CategorySerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'slug']
         read_only_fields = ['slug']
 class ProductImageSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
+
+    def get_image(self, obj):
+        """Return the full Cloudinary URL instead of the broken /media/ relative path."""
+        if not obj.image:
+            return None
+        # obj.image.url gives the full https://res.cloudinary.com/... URL
+        try:
+            return obj.image.url
+        except Exception:
+            return str(obj.image)
+
     class Meta:
         model = ProductImage
         fields = ['id', 'image', 'alt_text', 'is_primary']

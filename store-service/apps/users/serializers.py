@@ -5,20 +5,25 @@ from .models import Store
 User = get_user_model()
 
 class StoreSerializer(serializers.ModelSerializer):
-    store_logo = serializers.ImageField(
-        required=False,
-        allow_null=True
-    )
+    store_logo = serializers.SerializerMethodField()
     store_description = serializers.CharField(
         required=False,
         allow_blank=True,
         allow_null=True
     )
-    
+
+    def get_store_logo(self, obj):
+        if not obj.store_logo:
+            return None
+        try:
+            return obj.store_logo.url
+        except Exception:
+            return str(obj.store_logo)
+
     class Meta:
         model = Store
         fields = ['id', 'user_id', 'store_name', 'slug', 'store_description', 'store_logo']
-    
+
     def to_internal_value(self, data):
         # Normalize empty strings to None for optional fields
         if 'store_description' in data and data['store_description'] == '':
@@ -27,11 +32,19 @@ class StoreSerializer(serializers.ModelSerializer):
 
 class PublicStoreSerializer(serializers.ModelSerializer):
     products = serializers.SerializerMethodField()
-    store_logo = serializers.ImageField(read_only=True)
+    store_logo = serializers.SerializerMethodField()
 
     class Meta:
         model = Store
         fields = ['store_name', 'slug', 'store_description', 'store_logo', 'created_at', 'products']
+
+    def get_store_logo(self, obj):
+        if not obj.store_logo:
+            return None
+        try:
+            return obj.store_logo.url
+        except Exception:
+            return str(obj.store_logo)
 
     def get_products(self, obj):
         from apps.products.serializers import ProductSerializer
