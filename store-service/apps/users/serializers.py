@@ -47,7 +47,26 @@ class PublicStoreSerializer(serializers.ModelSerializer):
             return str(obj.store_logo)
 
     def get_products(self, obj):
-        from apps.products.serializers import ProductSerializer
-        # Only surface active products on the public store page
-        active_products = obj.products.filter(is_active=True)
-        return ProductSerializer(active_products, many=True).data
+        """
+        Fetch active products for this store from the product-service over HTTP.
+        The store-service and product-service are separate containers — we cannot
+        import from each other's code directly.
+        """
+        import requests
+        import os
+        product_service_url = os.environ.get('PRODUCT_SERVICE_URL', 'http://localhost:8003')
+        try:
+            res = requests.get(
+                f"{product_service_url}/api/v1/products/products/",
+                params={'store_id': obj.user_id},
+                timeout=5,
+            )
+            if res.status_code == 200:
+                data = res.json()
+                # Handle both paginated {results:[...]} and plain list responses
+                if isinstance(data, dict) and 'results' in data:
+                    return data['results']
+                return data
+        except Exception:
+            pass
+        return []
