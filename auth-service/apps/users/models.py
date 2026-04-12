@@ -16,6 +16,11 @@ class User(AbstractUser):
         choices=Role.choices,
         default=Role.BUYER,
     )
+    admin_permissions = models.JSONField(
+        default=list, 
+        blank=True,
+        help_text=_("List of permissions for sub-admins, e.g. ['manage_buyers', 'manage_sellers']")
+    )
 
     
     

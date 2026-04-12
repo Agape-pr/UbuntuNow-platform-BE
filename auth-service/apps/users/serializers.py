@@ -105,7 +105,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'role', 'phone_number', 'store']
+        fields = ['id', 'email', 'role', 'phone_number', 'store', 'is_superuser', 'admin_permissions']
 
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
@@ -113,8 +113,10 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
-        # Add custom claims
+        # Add custom claims for RBAC
         token['role'] = user.role
+        token['is_superuser'] = user.is_superuser
+        token['admin_permissions'] = user.admin_permissions
         
         # Inject store_id into JWT for seller stateless auth downstream
         if user.role == 'seller':
@@ -161,5 +163,37 @@ class AdminUserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'email', 'username', 'role', 'phone_number',
-            'is_active', 'is_staff', 'date_joined', 'last_login', 'store'
+            'is_active', 'is_staff', 'is_superuser', 'admin_permissions',
+            'date_joined', 'last_login', 'store'
         ]
+
+class AdminUserCreateSerializer(serializers.ModelSerializer):
+    """Used strictly by Super Admins to create sub-admins or regular users manually."""
+    password = serializers.CharField(write_only=True)
+    
+    class Meta:
+        model = User
+        fields = ['email', 'password', 'role', 'admin_permissions', 'phone_number']
+
+    def create(self, validated_data):
+        password = validated_data.pop('password')
+        role = validated_data.pop('role', User.Role.BUYER)
+        admin_permissions = validated_data.pop('admin_permissions', [])
+        
+        # When creating a user via Admin, they are verified immediately
+        user = User.objects.create_user(
+            email=validated_data['email'],
+            password=password,
+            username=validated_data['email'],
+            role=role,
+            is_active=True,
+            admin_permissions=admin_permissions,
+            **validated_data
+        )
+
+        # Grant Django admin access automatically if role is admin
+        if role == 'admin':
+            user.is_staff = True
+            user.save()
+
+        return user

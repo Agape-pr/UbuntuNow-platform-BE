@@ -10,6 +10,7 @@ from .serializers import (
     UserDetailSerializer,
     CustomTokenObtainPairSerializer,
     AdminUserSerializer,
+    AdminUserCreateSerializer,
 )
 from .models import User
 from apps.authentication.services.otp_service import create_email_otp
@@ -51,13 +52,29 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
 # ── Admin Views ────────────────────────────────────────────────────────────────
 
-class AdminUserListView(generics.ListAPIView):
+class AdminUserListView(generics.ListCreateAPIView):
     """
     GET /users/admin/users/
     Requires is_staff=True. Filter by ?role=seller|buyer|admin, search by ?search=email
+    
+    POST /users/admin/users/
+    Creates a new user. Requires is_superuser=True.
     """
-    serializer_class = AdminUserSerializer
     permission_classes = [IsAdminUser]
+
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return AdminUserCreateSerializer
+        return AdminUserSerializer
+
+    def create(self, request, *args, **kwargs):
+        # Security Guard: Only superusers can create other admins/users
+        if not request.user.is_superuser:
+            return Response(
+                {"error": "Only Super Admins can create new users and assign permissions."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        return super().create(request, *args, **kwargs)
 
     def get_queryset(self):
         qs = User.objects.all().order_by('-date_joined')
