@@ -6,6 +6,7 @@ from .views import (
     CustomTokenObtainPairView,
     AdminUserListView,
     AdminUserDetailView,
+    AdminSetupView,
 )
 
 urlpatterns = [
@@ -17,4 +18,7 @@ urlpatterns = [
     # Admin endpoints — requires is_staff=True
     path('admin/users/', AdminUserListView.as_view(), name='admin-user-list'),
     path('admin/users/<int:pk>/', AdminUserDetailView.as_view(), name='admin-user-detail'),
+
+    # One-time admin setup — secured by ADMIN_SETUP_SECRET env var
+    path('admin/setup/', AdminSetupView.as_view(), name='admin-setup'),
 ]
