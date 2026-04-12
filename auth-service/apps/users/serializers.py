@@ -138,3 +138,28 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         
         return data
 
+
+class AdminUserSerializer(serializers.ModelSerializer):
+    """Full user profile for admin panel — includes store data for sellers."""
+    store = serializers.SerializerMethodField()
+
+    def get_store(self, obj):
+        if obj.role == 'seller':
+            try:
+                store_url = os.environ.get('STORE_SERVICE_URL', 'http://store-service:8002')
+                res = requests.get(
+                    f"{store_url}/api/v1/users/internal/stores/{obj.id}/",
+                    timeout=3
+                )
+                if res.status_code == 200:
+                    return res.json()
+            except Exception:
+                pass
+        return None
+
+    class Meta:
+        model = User
+        fields = [
+            'id', 'email', 'username', 'role', 'phone_number',
+            'is_active', 'is_staff', 'date_joined', 'last_login', 'store'
+        ]
