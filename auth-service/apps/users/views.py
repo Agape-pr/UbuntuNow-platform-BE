@@ -68,13 +68,26 @@ class AdminUserListView(generics.ListCreateAPIView):
         return AdminUserSerializer
 
     def create(self, request, *args, **kwargs):
-        # Security Guard: Only superusers can create other admins/users
-        if not request.user.is_superuser:
+        # Security Guard: Only superusers can create other admins or assign permissions
+        data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+        role = data.get('role')
+        
+        # If trying to create an admin, ensure they are a superuser
+        if role == 'admin' and not request.user.is_superuser:
             return Response(
-                {"error": "Only Super Admins can create new users and assign permissions."},
+                {"error": "Only Super Admins can create new admin accounts."},
                 status=status.HTTP_403_FORBIDDEN
             )
-        return super().create(request, *args, **kwargs)
+            
+        # Ensure non-superusers cannot assign admin_permissions
+        if 'admin_permissions' in data and not request.user.is_superuser:
+            data['admin_permissions'] = []
+            
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     def get_queryset(self):
         qs = User.objects.all().order_by('-date_joined')
