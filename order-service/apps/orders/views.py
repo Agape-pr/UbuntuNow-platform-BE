@@ -1,8 +1,9 @@
 from rest_framework import viewsets, permissions, status, decorators
 from rest_framework.response import Response
 from django.db import transaction
+import requests
+import os
 from .models import Order, OrderItem
-from apps.products.models import Product
 from .serializers import OrderSerializer, CheckoutSerializer
 
 class OrderViewSet(viewsets.ModelViewSet):
@@ -11,65 +12,134 @@ class OrderViewSet(viewsets.ModelViewSet):
     http_method_names = ['get', 'post'] # Buyer can list or checkout (post)
 
     def get_queryset(self):
-        return Order.objects.filter(buyer=self.request.user).order_by('-created_at')
+        return Order.objects.filter(buyer_id=self.request.user.id).order_by('-created_at')
 
     def create(self, request, *args, **kwargs):
-        # Checkout Logic
         serializer = CheckoutSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
         items_data = serializer.validated_data['items']
-        product_ids = [item['product_id'] for item in items_data]
-        products = Product.objects.in_bulk(product_ids)
 
-        # Group by store
+        product_service_url = os.environ.get('PRODUCT_SERVICE_URL', 'http://product-service:8003')
         store_groups = {}
+
+        # Fetch product data from product-service
         for item in items_data:
-            product = products.get(item['product_id'])
-            if not product:
-                return Response({'error': f"Product {item['product_id']} not found"}, status=status.HTTP_400_BAD_REQUEST)
-            if product.stock_quantity < item['quantity']:
-                 return Response({'error': f"Insufficient stock for {product.name}"}, status=status.HTTP_400_BAD_REQUEST)
+            product_id = item['product_id']
+            qty = item['quantity']
+            try:
+                res = requests.get(f"{product_service_url}/api/v1/products/{product_id}/", timeout=5)
+                if res.status_code != 200:
+                    return Response({'error': f"Product {product_id} not found"}, status=status.HTTP_400_BAD_REQUEST)
+                product_data = res.json()
+            except Exception:
+                return Response({'error': f"Failed to contact product service"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+            if product_data.get('stock_quantity', 0) < qty:
+                 return Response({'error': f"Insufficient stock for {product_data.get('name')}"}, status=status.HTTP_400_BAD_REQUEST)
             
-            store_id = product.store.id
+            store_id = product_data.get('store') # Depending on how product serializer returns it
+            if type(store_id) is dict:
+                store_id = store_id.get('id')
+                
             if store_id not in store_groups:
                 store_groups[store_id] = []
             store_groups[store_id].append({
-                'product': product,
-                'quantity': item['quantity']
+                'product': product_data,
+                'quantity': qty
             })
 
         orders = []
         with transaction.atomic():
             for store_id, items in store_groups.items():
-                # Calculate total
-                total = sum(i['product'].price * i['quantity'] for i in items)
-                store = items[0]['product'].store # Get store instance from first product
-
+                total = sum(float(i['product'].get('price', 0)) * i['quantity'] for i in items)
+                
                 order = Order.objects.create(
-                    buyer=request.user,
-                    store=store,
+                    buyer_id=request.user.id,
+                    store_id=store_id,
                     total_amount=total
                 )
                 
                 for i in items:
-                    product = i['product']
+                    prod = i['product']
                     qty = i['quantity']
                     OrderItem.objects.create(
                         order=order,
-                        product=product,
-                        product_name=product.name,
+                        product_id=prod.get('id'),
+                        product_name=prod.get('name'),
                         quantity=qty,
-                        price=product.price
+                        price=prod.get('price')
                     )
-                    # Deduct stock
-                    product.stock_quantity -= qty
-                    product.save()
+                    
+                    # Deduct stock via product-service
+                    try:
+                        # Assuming product-service has an endpoint to deduct stock, or we just patch it
+                        new_stock = int(prod.get('stock_quantity', 0)) - qty
+                        requests.patch(
+                            f"{product_service_url}/api/v1/products/{prod.get('id')}/", 
+                            json={'stock_quantity': new_stock},
+                            headers={'Authorization': request.headers.get('Authorization')},
+                            timeout=5
+                        )
+                    except Exception as e:
+                        print(f"Failed to deduct stock for {prod.get('id')}: {e}")
                 
                 orders.append(order)
+                
+                # Publish Order Created Event
+                try:
+                    from shared.core.events import publish_event
+                    publish_event(
+                        exchange='ubuntunow.events',
+                        routing_key='order.created',
+                        message_dict={
+                            'order_id': order.id,
+                            'buyer_id': order.buyer_id,
+                            'store_id': order.store_id,
+                            'total_amount': str(order.total_amount),
+                            'status': order.status
+                        }
+                    )
+                except Exception as e:
+                    print(f"Failed to publish order created event: {e}")
 
         result_serializer = OrderSerializer(orders, many=True)
         return Response(result_serializer.data, status=status.HTTP_201_CREATED)
+
+    @decorators.action(detail=True, methods=['post'], url_path='mock-payment')
+    def mock_payment(self, request, pk=None):
+        try:
+            order = self.get_queryset().get(pk=pk)
+        except Order.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+            
+        if order.payment_status != Order.PaymentStatus.PENDING:
+            return Response({'error': 'Order already paid or processed'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        # Simulate payment success
+        order.payment_status = Order.PaymentStatus.HELD
+        order.status = Order.Status.SHIPPED # Move to SHIPPED immediately for testing
+        order.save()
+        
+        # Publish event for Notification Service
+        event_data = {
+            'order_id': order.id,
+            'buyer_id': order.buyer_id,
+            'store_id': order.store_id,
+            'total_amount': str(order.total_amount),
+            'status': order.status,
+            'payment_status': order.payment_status,
+        }
+        try:
+            from shared.core.events import publish_event
+            publish_event(
+                exchange='ubuntunow.events',
+                routing_key='order.payment.held',
+                message_dict=event_data
+            )
+        except Exception as e:
+            print(f"Failed to publish mock payment event: {e}")
+            
+        return Response({'status': 'mock payment successful', 'payment_status': order.payment_status})
 
     @decorators.action(detail=True, methods=['post'], url_path='confirm-receipt')
     def confirm_receipt(self, request, pk=None):
@@ -78,10 +148,9 @@ class OrderViewSet(viewsets.ModelViewSet):
         except Order.DoesNotExist:
              return Response(status=status.HTTP_404_NOT_FOUND)
              
-        if order.status == Order.Status.SHIPPED: # Or whatever logic
+        if order.status == Order.Status.SHIPPED:
              order.status = Order.Status.COMPLETED
              order.save()
-             # Trigger payment release logic here (call Payment Service)
              return Response({'status': 'confirmed'})
         return Response({'error': 'Order cannot be confirmed'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -92,8 +161,11 @@ class SellerOrderViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = OrderSerializer
 
     def get_queryset(self):
-        if self.request.user.is_seller():
-            return Order.objects.filter(store__user=self.request.user).order_by('-created_at')
+        # We need store_id from JWT or user role.
+        # Assuming JWT provides store_id for sellers
+        store_id = getattr(self.request.user, 'store_id', None)
+        if store_id:
+            return Order.objects.filter(store_id=store_id).order_by('-created_at')
         return Order.objects.none()
 
     @decorators.action(detail=True, methods=['post'], url_path='update-status')
