@@ -30,35 +30,26 @@ class Command(BaseCommand):
                 if routing_key == 'order.created':
                     buyer_id = body_dict.get('buyer_id')
                     order_id = body_dict.get('order_id')
-                    try:
-                        buyer = User.objects.get(id=buyer_id)
+                    if buyer_id and order_id:
                         Notification.objects.create(
-                            recipient=buyer,
+                            recipient_id=buyer_id,
                             title=f"Order #{order_id} Received",
                             message=f"We have received your order #{order_id}. Awaiting payment."
                         )
-                    except User.DoesNotExist:
-                        self.stdout.write(self.style.ERROR(f"User {buyer_id} not found locally."))
+                        self.stdout.write(self.style.SUCCESS(f"Notification created for order #{order_id}"))
                 
                 elif routing_key == 'order.payment.held':
                     buyer_id = body_dict.get('buyer_id')
                     store_id = body_dict.get('store_id')
                     order_id = body_dict.get('order_id')
                     
-                    try:
-                        buyer = User.objects.get(id=buyer_id)
+                    if buyer_id and order_id:
                         Notification.objects.create(
-                            recipient=buyer,
+                            recipient_id=buyer_id,
                             title=f"Payment Successful (Order #{order_id})",
                             message=f"Your payment for order #{order_id} has been securely held in escrow. The seller will now ship your items."
                         )
-                    except User.DoesNotExist:
-                         self.stdout.write(self.style.ERROR(f"Buyer {buyer_id} not found locally."))
-                         
-                    # For seller, we might need to fetch the seller user ID via the store_id
-                    # Assuming store_id relates to a seller, but we might not have store DB access here
-                    # For now, we simulate seller notification or log it
-                    self.stdout.write(self.style.SUCCESS(f"Notification sent for payment on order #{order_id}"))
+                        self.stdout.write(self.style.SUCCESS(f"Notification sent for payment on order #{order_id}"))
 
             except Exception as e:
                 self.stdout.write(self.style.ERROR(f"Error processing event {routing_key}: {e}"))
