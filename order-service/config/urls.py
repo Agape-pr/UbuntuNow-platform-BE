@@ -16,7 +16,7 @@ urlpatterns = [
     # ===============================
     # API v1
     # ===============================
-    # path("api/v1/orders/", include("apps.orders.urls")),
+    path("api/v1/orders/", include("apps.orders.urls")),
 
     # ===============================
     # API Documentation
