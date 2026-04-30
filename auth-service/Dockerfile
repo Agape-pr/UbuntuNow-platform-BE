@@ -20,4 +20,4 @@ EXPOSE 8000
 # Run migrations, collect static files, then start the server
 CMD python manage.py migrate --noinput && \
     python manage.py collectstatic --noinput && \
-    gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --bind [::]:${PORT:-8000}
+    gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000}
