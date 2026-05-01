@@ -29,7 +29,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             product_id = item['product_id']
             qty = item['quantity']
             try:
-                res = requests.get(f"{product_service_url}/api/v1/products/{product_id}/", timeout=5)
+                res = requests.get(f"{product_service_url}/api/v1/products/products/{product_id}/", timeout=5)
                 if res.status_code != 200:
                     print(f"Checkout failed: Product {product_id} returned status {res.status_code}")
                     return Response({'error': f"Product {product_id} not found"}, status=status.HTTP_400_BAD_REQUEST)
@@ -80,7 +80,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                         # Assuming product-service has an endpoint to deduct stock, or we just patch it
                         new_stock = int(prod.get('stock_quantity', 0)) - qty
                         requests.patch(
-                            f"{product_service_url}/api/v1/products/{prod.get('id')}/", 
+                            f"{product_service_url}/api/v1/products/seller/products/{prod.get('id')}/", 
                             json={'stock_quantity': new_stock},
                             headers={'Authorization': request.headers.get('Authorization')},
                             timeout=5
