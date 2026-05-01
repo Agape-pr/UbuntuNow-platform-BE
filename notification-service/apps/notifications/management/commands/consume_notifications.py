@@ -50,6 +50,27 @@ class Command(BaseCommand):
                             message=f"Your payment for order #{order_id} has been securely held in escrow. The seller will now ship your items."
                         )
                         self.stdout.write(self.style.SUCCESS(f"Notification sent for payment on order #{order_id}"))
+                    
+                    if store_id:
+                        # Fetch the seller's user_id from store-service
+                        import os
+                        import requests
+                        store_service_url = os.environ.get('STORE_SERVICE_URL', 'http://store-service:8002')
+                        try:
+                            # Assuming store-service has /api/v1/stores/{id}/
+                            res = requests.get(f"{store_service_url}/api/v1/stores/{store_id}/", timeout=5)
+                            if res.status_code == 200:
+                                store_data = res.json()
+                                seller_id = store_data.get('user_id')
+                                if seller_id:
+                                    Notification.objects.create(
+                                        recipient_id=seller_id,
+                                        title=f"New Order Paid (Order #{order_id})",
+                                        message=f"Payment for order #{order_id} has been secured in escrow. Please prepare the items for shipping."
+                                    )
+                                    self.stdout.write(self.style.SUCCESS(f"Notification sent to seller {seller_id} for order #{order_id}"))
+                        except Exception as ex:
+                            self.stdout.write(self.style.ERROR(f"Failed to notify seller for store {store_id}: {ex}"))
 
             except Exception as e:
                 self.stdout.write(self.style.ERROR(f"Error processing event {routing_key}: {e}"))

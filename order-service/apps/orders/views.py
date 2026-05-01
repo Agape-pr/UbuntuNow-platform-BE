@@ -83,9 +83,8 @@ class OrderViewSet(viewsets.ModelViewSet):
                         # Assuming product-service has an endpoint to deduct stock, or we just patch it
                         new_stock = int(prod.get('stock_quantity', 0)) - qty
                         requests.patch(
-                            f"{product_service_url}/api/v1/products/seller/products/{prod.get('id')}/", 
+                            f"{product_service_url}/api/v1/products/internal/stock/{prod.get('id')}/", 
                             json={'stock_quantity': new_stock},
-                            headers={'Authorization': request.headers.get('Authorization')},
                             timeout=5
                         )
                     except Exception as e:

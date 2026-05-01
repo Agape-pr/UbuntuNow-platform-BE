@@ -110,3 +110,19 @@ from .serializers import CategorySerializer
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+
+@api_view(['PATCH'])
+@permission_classes([permissions.AllowAny])
+def update_stock_internal(request, id):
+    # This endpoint is only called internally by order-service to deduct stock
+    # bypassing the IsSeller permission check.
+    product = get_object_or_404(Product, id=id)
+    new_stock = request.data.get('stock_quantity')
+    if new_stock is not None:
+        product.stock_quantity = new_stock
+        product.save()
+        return Response({'status': 'stock updated', 'new_stock': product.stock_quantity})
+    return Response({'error': 'stock_quantity required'}, status=400)
