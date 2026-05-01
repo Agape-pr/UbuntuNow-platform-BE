@@ -169,10 +169,10 @@ class SellerOrderViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         # We need store_id from JWT or user role.
-        # Assuming JWT provides store_id for sellers
-        store_id = getattr(self.request.user, 'store_id', None)
-        if store_id:
-            return Order.objects.filter(store_id=store_id).order_by('-created_at')
+        # StatelessUser stores it in request.user.store.id
+        store = getattr(self.request.user, 'store', None)
+        if store and hasattr(store, 'id') and store.id:
+            return Order.objects.filter(store_id=store.id).order_by('-created_at')
         return Order.objects.none()
 
     @decorators.action(detail=True, methods=['post'], url_path='update-status')
