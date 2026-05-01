@@ -42,9 +42,12 @@ class OrderViewSet(viewsets.ModelViewSet):
                  print(f"Checkout failed: Insufficient stock for {product_data.get('name')}. Stock: {product_data.get('stock_quantity')}, Requested: {qty}")
                  return Response({'error': f"Insufficient stock for {product_data.get('name')}"}, status=status.HTTP_400_BAD_REQUEST)
             
-            store_id = product_data.get('store') # Depending on how product serializer returns it
+            store_id = product_data.get('store_id') or product_data.get('store')
             if type(store_id) is dict:
                 store_id = store_id.get('id')
+            
+            if not store_id:
+                return Response({'error': f"Product {product_id} is missing a store_id"}, status=status.HTTP_400_BAD_REQUEST)
                 
             if store_id not in store_groups:
                 store_groups[store_id] = []
