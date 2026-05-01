@@ -16,7 +16,9 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         serializer = CheckoutSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            print(f"Checkout failed: Serializer validation errors: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         items_data = serializer.validated_data['items']
 
         product_service_url = os.environ.get('PRODUCT_SERVICE_URL', 'http://product-service:8003')
@@ -29,12 +31,15 @@ class OrderViewSet(viewsets.ModelViewSet):
             try:
                 res = requests.get(f"{product_service_url}/api/v1/products/{product_id}/", timeout=5)
                 if res.status_code != 200:
+                    print(f"Checkout failed: Product {product_id} returned status {res.status_code}")
                     return Response({'error': f"Product {product_id} not found"}, status=status.HTTP_400_BAD_REQUEST)
                 product_data = res.json()
-            except Exception:
+            except Exception as e:
+                print(f"Checkout failed: Exception calling product service: {e}")
                 return Response({'error': f"Failed to contact product service"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
             if product_data.get('stock_quantity', 0) < qty:
+                 print(f"Checkout failed: Insufficient stock for {product_data.get('name')}. Stock: {product_data.get('stock_quantity')}, Requested: {qty}")
                  return Response({'error': f"Insufficient stock for {product_data.get('name')}"}, status=status.HTTP_400_BAD_REQUEST)
             
             store_id = product_data.get('store') # Depending on how product serializer returns it
