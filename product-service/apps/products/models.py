@@ -43,6 +43,12 @@ class Product(models.Model):
     slug = models.SlugField(unique=True, blank=True, db_index=True)
     stock_quantity = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
+    in_stock = models.BooleanField(
+        default=True,
+        help_text="Does the seller currently hold this item in stock? "
+                  "True = 'Ready for quick delivery'. "
+                  "False = 'Confirm & deliver same day'."
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
