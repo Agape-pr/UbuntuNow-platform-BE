@@ -170,9 +170,26 @@ class SellerOrderViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         # We need store_id from JWT or user role.
         # StatelessUser stores it in request.user.store.id
+        store_id = None
         store = getattr(self.request.user, 'store', None)
         if store and hasattr(store, 'id') and store.id:
-            return Order.objects.filter(store_id=store.id).order_by('-created_at')
+            store_id = store.id
+            
+        if not store_id and getattr(self.request.user, 'role', None) == 'seller':
+            import os
+            import requests
+            try:
+                store_url = os.environ.get('STORE_SERVICE_URL', 'http://store-service:8002')
+                res = requests.get(f"{store_url}/api/v1/users/internal/stores/{self.request.user.id}/", timeout=2)
+                if res.status_code == 200:
+                    store_data = res.json()
+                    if store_data.get('id'):
+                        store_id = store_data.get('id')
+            except Exception as e:
+                print(f"Fallback store_id fetch failed: {e}")
+                
+        if store_id:
+            return Order.objects.filter(store_id=store_id).order_by('-created_at')
         return Order.objects.none()
 
     @decorators.action(detail=True, methods=['post'], url_path='update-status')

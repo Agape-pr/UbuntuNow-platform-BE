@@ -25,11 +25,24 @@ class IsSeller(permissions.BasePermission):
         if store and hasattr(store, 'id') and store.id:
             request.store_id = store.id
             return True
+            
+        # Fallback: if store_id is missing from JWT (e.g. timeout during token generation or old token),
+        # fetch it directly from store-service
+        import os
+        import requests
+        try:
+            store_url = os.environ.get('STORE_SERVICE_URL', 'http://store-service:8002')
+            res = requests.get(f"{store_url}/api/v1/users/internal/stores/{request.user.id}/", timeout=2)
+            if res.status_code == 200:
+                store_data = res.json()
+                if store_data.get('id'):
+                    request.store_id = store_data.get('id')
+                    return True
+        except Exception as e:
+            print(f"Fallback store_id fetch failed: {e}")
         
-        # If the JWT token does not physically have the store_id payload injected, 
-        # we reject the request. The user must logout and re-login to generate a new token 
-        # using the patched auth-service.
-        print(f"Error checking store permission: Missing store_id in JWT. User {request.user.id} needs to authenticate again.")
+        # If we still can't find the store_id, reject the request.
+        print(f"Error checking store permission: Missing store_id in JWT and fallback failed. User {request.user.id} needs to authenticate again.")
         return False
 
 
