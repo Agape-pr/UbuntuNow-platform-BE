@@ -44,6 +44,7 @@ class ProductSerializer(serializers.ModelSerializer):
             'category',
             'category_name',
             'name',
+            'slug',
             'description',
             'price',
             'stock_quantity',
@@ -51,7 +52,7 @@ class ProductSerializer(serializers.ModelSerializer):
             'images',
             'created_at'
         ]
-        read_only_fields = ['store_id', 'created_at']
+        read_only_fields = ['store_id', 'created_at', 'slug']
 
 
 
