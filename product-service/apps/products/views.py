@@ -65,7 +65,6 @@ class SellerProductViewSet(viewsets.ModelViewSet):
         return (
             Product.objects
             .filter(store_id=store_id)
-            .select_related("category")
             .prefetch_related("images")
         )
 
@@ -82,13 +81,12 @@ class PublicProductViewSet(viewsets.ReadOnlyModelViewSet):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
 
     filterset_fields = {
-        "category__slug": ["exact"],
+        "category": ["exact"],
         "store_id": ["exact"],
         "price": ["gte", "lte"],
     }
 
-    search_fields = ["name", "description", "category__name",
-    "category__slug"]
+    search_fields = ["name", "description", "category"]
     ordering_fields = ["price", "created_at"]
     ordering = ["-created_at"]
 
@@ -96,7 +94,6 @@ class PublicProductViewSet(viewsets.ReadOnlyModelViewSet):
         return (
             Product.objects
             .filter(is_active=True)
-            .select_related("category")
             .prefetch_related("images")
         )
 
@@ -113,16 +110,6 @@ class PublicProductViewSet(viewsets.ReadOnlyModelViewSet):
         self.check_object_permissions(self.request, obj)
         return obj
 
-
-# views.py
-from rest_framework import viewsets
-from .models import Category
-from .serializers import CategorySerializer
-
-
-class CategoryViewSet(viewsets.ModelViewSet):
-    queryset = Category.objects.all()
-    serializer_class = CategorySerializer
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
