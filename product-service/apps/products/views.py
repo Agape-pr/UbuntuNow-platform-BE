@@ -14,35 +14,51 @@ class IsSeller(permissions.BasePermission):
     """
 
     def has_permission(self, request, view):
+        import os
+        import requests as http_requests
+
         if not request.user or not request.user.is_authenticated:
-            return False
-            
-        if not getattr(request.user, 'role', None) == 'seller':
+            print("IsSeller: rejected — user not authenticated")
             return False
 
-        # Safely extract store_id from the stateless JWT user object
+        role = getattr(request.user, 'role', None)
+        if role != 'seller':
+            print(f"IsSeller: rejected — user role is '{role}', not 'seller'")
+            return False
+
+        # 1️⃣ Try store_id directly from the JWT StatelessUser object
         store = getattr(request.user, 'store', None)
-        if store and hasattr(store, 'id') and store.id:
-            request.store_id = store.id
+        store_id = getattr(store, 'id', None) if store else None
+
+        if store_id:
+            request.store_id = store_id
+            print(f"IsSeller: approved — store_id={store_id} from JWT")
             return True
-            
-        # Fallback: if store_id is missing from JWT (e.g. timeout during token generation or old token),
-        # fetch it directly from store-service
-        import os
-        import requests
+
+        # 2️⃣ Fallback: JWT was issued before store was created OR store_id missing.
+        #    Hit the store-service internal API to resolve it.
+        user_id = getattr(request.user, 'id', None)
+        print(f"IsSeller: store_id missing in JWT for user {user_id} — attempting fallback fetch")
+
+        store_url = os.environ.get('STORE_SERVICE_URL', 'http://store-service:8002')
         try:
-            store_url = os.environ.get('STORE_SERVICE_URL', 'http://store-service:8002')
-            res = requests.get(f"{store_url}/api/v1/users/internal/stores/{request.user.id}/", timeout=2)
+            res = http_requests.get(
+                f"{store_url}/api/v1/users/internal/stores/{user_id}/",
+                timeout=3,
+            )
+            print(f"IsSeller: store-service responded {res.status_code} — {res.text[:200]}")
             if res.status_code == 200:
                 store_data = res.json()
-                if store_data.get('id'):
-                    request.store_id = store_data.get('id')
+                store_id = store_data.get('id') or store_data.get('user_id')
+                if store_id:
+                    request.store_id = store_id
+                    print(f"IsSeller: approved via fallback — store_id={store_id}")
                     return True
         except Exception as e:
-            print(f"Fallback store_id fetch failed: {e}")
-        
-        # If we still can't find the store_id, reject the request.
-        print(f"Error checking store permission: Missing store_id in JWT and fallback failed. User {request.user.id} needs to authenticate again.")
+            print(f"IsSeller: fallback HTTP call failed — {e}")
+
+        print(f"IsSeller: rejected — could not resolve store_id for user {user_id}. "
+              f"STORE_SERVICE_URL={store_url}. Seller must log out and log back in.")
         return False
 
 
