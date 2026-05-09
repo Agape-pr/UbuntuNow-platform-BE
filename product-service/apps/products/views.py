@@ -49,11 +49,13 @@ class IsSeller(permissions.BasePermission):
             print(f"IsSeller: store-service responded {res.status_code} — {res.text[:200]}")
             if res.status_code == 200:
                 store_data = res.json()
-                store_id = store_data.get('id') or store_data.get('user_id')
+                # Must use Store.id (PK), NOT user_id — products are indexed by Store.id
+                store_id = store_data.get('id')
                 if store_id:
                     request.store_id = store_id
-                    print(f"IsSeller: approved via fallback — store_id={store_id}")
+                    print(f"IsSeller: approved via fallback — store_id={store_id} (Store.pk)")
                     return True
+                print(f"IsSeller: store-service returned no 'id' field: {store_data}")
         except Exception as e:
             print(f"IsSeller: fallback HTTP call failed — {e}")
 
