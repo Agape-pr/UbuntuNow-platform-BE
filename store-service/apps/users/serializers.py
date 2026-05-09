@@ -51,6 +51,9 @@ class PublicStoreSerializer(serializers.ModelSerializer):
         Fetch active products for this store from the product-service over HTTP.
         The store-service and product-service are separate containers — we cannot
         import from each other's code directly.
+
+        NOTE: Products are stored with store_id = Store.id (the Store table PK),
+        NOT user_id. The IsSeller permission sets request.store_id = store.id.
         """
         import requests
         import os
@@ -58,7 +61,7 @@ class PublicStoreSerializer(serializers.ModelSerializer):
         try:
             res = requests.get(
                 f"{product_service_url}/api/v1/products/products/",
-                params={'store_id': obj.user_id},
+                params={'store_id': obj.id},   # ← Store PK, not user_id
                 timeout=5,
             )
             if res.status_code == 200:
@@ -67,6 +70,6 @@ class PublicStoreSerializer(serializers.ModelSerializer):
                 if isinstance(data, dict) and 'results' in data:
                     return data['results']
                 return data
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"PublicStoreSerializer.get_products failed: {e}")
         return []
