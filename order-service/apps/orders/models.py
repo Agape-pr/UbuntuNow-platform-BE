@@ -37,6 +37,7 @@ class OrderItem(models.Model):
     product_name = models.CharField(max_length=255) # Snapshot in case product is deleted
     quantity = models.PositiveIntegerField(default=1)
     price = models.DecimalField(max_digits=10, decimal_places=2) # Snapshot price
+    selected_variations = models.JSONField(default=dict, blank=True, null=True, help_text="User selected options e.g. {'color': 'Red', 'size': 'M'}")
 
     @property
     def subtotal(self):

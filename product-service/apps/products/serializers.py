@@ -43,6 +43,7 @@ class ProductSerializer(serializers.ModelSerializer):
             'stock_quantity',
             'is_active',
             'in_stock',
+            'variations',
             'images',
             'created_at'
         ]
@@ -67,6 +68,7 @@ class ProductCreateUpdateSerializer(serializers.ModelSerializer):
             'stock_quantity',
             'is_active',
             'in_stock',
+            'variations',
             'uploaded_images'
         ]
 

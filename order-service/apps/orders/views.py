@@ -28,6 +28,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         for item in items_data:
             product_id = item['product_id']
             qty = item['quantity']
+            variations = item.get('selected_variations') or {}
             try:
                 res = requests.get(f"{product_service_url}/api/v1/products/products/{product_id}/", timeout=5)
                 if res.status_code != 200:
@@ -53,7 +54,8 @@ class OrderViewSet(viewsets.ModelViewSet):
                 store_groups[store_id] = []
             store_groups[store_id].append({
                 'product': product_data,
-                'quantity': qty
+                'quantity': qty,
+                'selected_variations': variations
             })
 
         orders = []
@@ -70,12 +72,14 @@ class OrderViewSet(viewsets.ModelViewSet):
                 for i in items:
                     prod = i['product']
                     qty = i['quantity']
+                    variations = i.get('selected_variations') or {}
                     OrderItem.objects.create(
                         order=order,
                         product_id=prod.get('id'),
                         product_name=prod.get('name'),
                         quantity=qty,
-                        price=prod.get('price')
+                        price=prod.get('price'),
+                        selected_variations=variations
                     )
                     
                     # Deduct stock via product-service

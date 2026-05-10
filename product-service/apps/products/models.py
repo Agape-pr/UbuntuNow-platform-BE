@@ -18,6 +18,7 @@ class Product(models.Model):
                   "True = 'Ready for quick delivery'. "
                   "False = 'Confirm & deliver same day'."
     )
+    variations = models.JSONField(default=dict, blank=True, null=True, help_text="e.g. {'colors': ['Red', 'Blue'], 'sizes': ['S', 'M']}")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
