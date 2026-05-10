@@ -128,7 +128,8 @@ class VerifyEmailOTPView(GenericAPIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        refresh = RefreshToken.for_user(user)
+        from apps.users.serializers import CustomTokenObtainPairSerializer
+        refresh = CustomTokenObtainPairSerializer.get_token(user)
 
         return Response(
             {
