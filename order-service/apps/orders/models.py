@@ -25,6 +25,7 @@ class Order(models.Model):
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     payment_status = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.PENDING)
+    delivery_address = models.JSONField(default=dict, blank=True, null=True, help_text="Snapshot of the delivery address at checkout")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

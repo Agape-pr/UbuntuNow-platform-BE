@@ -11,7 +11,7 @@ class OrderSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields = ['id', 'store_id', 'total_amount', 'status', 'payment_status', 'items', 'created_at']
+        fields = ['id', 'store_id', 'total_amount', 'status', 'payment_status', 'delivery_address', 'items', 'created_at']
 
 class CheckoutItemSerializer(serializers.Serializer):
     product_id = serializers.IntegerField()
@@ -20,3 +20,4 @@ class CheckoutItemSerializer(serializers.Serializer):
 
 class CheckoutSerializer(serializers.Serializer):
     items = CheckoutItemSerializer(many=True)
+    delivery_address = serializers.JSONField(required=False, allow_null=True)

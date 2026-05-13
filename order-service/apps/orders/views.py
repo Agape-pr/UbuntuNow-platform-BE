@@ -20,6 +20,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             print(f"Checkout failed: Serializer validation errors: {serializer.errors}")
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         items_data = serializer.validated_data['items']
+        delivery_address = serializer.validated_data.get('delivery_address')
 
         product_service_url = os.environ.get('PRODUCT_SERVICE_URL', 'http://product-service:8003')
         store_groups = {}
@@ -66,7 +67,8 @@ class OrderViewSet(viewsets.ModelViewSet):
                 order = Order.objects.create(
                     buyer_id=request.user.id,
                     store_id=store_id,
-                    total_amount=total
+                    total_amount=total,
+                    delivery_address=delivery_address
                 )
                 
                 for i in items:
