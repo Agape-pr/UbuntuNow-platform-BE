@@ -36,7 +36,7 @@ class PublicStoreSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Store
-        fields = ['store_name', 'slug', 'store_description', 'store_logo', 'created_at', 'products']
+        fields = ['id', 'store_name', 'slug', 'store_description', 'store_logo', 'created_at', 'products']
 
     def get_store_logo(self, obj):
         if not obj.store_logo:
