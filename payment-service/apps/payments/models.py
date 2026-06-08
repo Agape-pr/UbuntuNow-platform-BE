@@ -5,6 +5,7 @@ class Payment(models.Model):
     class Method(models.TextChoices):
         MOMO = 'momo', 'MTN Mobile Money'
         AIRTEL = 'airtel', 'Airtel Money'
+        PESAPAL = 'pesapal', 'Pesapal Gateway'
         # CARD = 'card', 'Credit/Debit Card'
 
     class Status(models.TextChoices):

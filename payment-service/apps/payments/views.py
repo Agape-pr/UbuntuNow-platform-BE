@@ -19,7 +19,7 @@ class InitiatePaymentView(views.APIView):
         
         # Create Payment Record
         payment, created = Payment.objects.get_or_create(
-            order=order,
+            order_id=order_id,
             defaults={
                 'payment_method': method,
                 'payment_amount': order.total_amount,
@@ -27,13 +27,23 @@ class InitiatePaymentView(views.APIView):
             }
         )
         
-        # Integration Logic usually goes here (e.g. call MoMo API)
-        # For MVP, we simulate success or return pending
+        # Integration Logic
+        redirect_url = None
+        if method == 'pesapal':
+            from .services import pesapal_service
+            try:
+                pesapal_response = pesapal_service.submit_order(payment, order)
+                payment.transaction_id = pesapal_response.get("order_tracking_id")
+                payment.save()
+                redirect_url = pesapal_response.get("redirect_url")
+            except Exception as e:
+                return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         return Response({
             'message': 'Payment initiated',
             'payment_id': payment.id,
-            'status': payment.payment_status
+            'status': payment.payment_status,
+            'redirect_url': redirect_url
         }, status=status.HTTP_201_CREATED)
 
 class PaymentStatusView(generics.RetrieveAPIView):
@@ -61,3 +71,54 @@ class ReleasePaymentView(views.APIView):
             payment.save()
             return Response({'status': 'released'})
         return Response({'error': 'Cannot release funds'}, status=status.HTTP_400_BAD_REQUEST)
+
+class PesapalIPNWebhookView(views.APIView):
+    """
+    Pesapal sends a POST request here when a payment completes or fails.
+    """
+    permission_classes = [permissions.AllowAny] # Webhook is public
+
+    def post(self, request):
+        order_tracking_id = request.query_params.get('OrderTrackingId') or request.data.get('OrderTrackingId')
+        
+        if not order_tracking_id:
+            return Response({"error": "Missing OrderTrackingId"}, status=status.HTTP_400_BAD_REQUEST)
+
+        from .services import pesapal_service
+        try:
+            # 1. Ask Pesapal what the true status of this transaction is
+            status_data = pesapal_service.get_transaction_status(order_tracking_id)
+            payment_status_code = status_data.get('status_code')
+            
+            # 2. Find our local Payment record
+            payment = get_object_or_404(Payment, transaction_id=order_tracking_id)
+            order = payment.order
+            
+            # 3. Update our Payment based on Pesapal's status
+            # Pesapal status codes: 0=INVALID, 1=COMPLETED, 2=FAILED, 3=REVERSED
+            if payment_status_code == 1:
+                payment.payment_status = Payment.Status.COMPLETED
+                payment.save()
+                
+                # Update Order to PAID
+                order.payment_status = 'paid'
+                order.status = 'confirmed' # Or whatever logic
+                order.save()
+            elif payment_status_code in [0, 2, 3]:
+                payment.payment_status = Payment.Status.FAILED
+                payment.save()
+                
+                order.payment_status = 'failed'
+                order.save()
+
+            # 4. Acknowledge the IPN so Pesapal stops retrying
+            return Response({
+                "orderNotificationType": request.data.get("OrderNotificationType"),
+                "orderTrackingId": order_tracking_id,
+                "orderMerchantReference": request.data.get("OrderMerchantReference"),
+                "status": 200
+            })
+            
+        except Exception as e:
+            # If we fail, return 500 so Pesapal retries later
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

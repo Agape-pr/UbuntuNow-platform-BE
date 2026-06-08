@@ -212,3 +212,9 @@ CORS_ALLOWED_ORIGINS = [
     "https://ubuntu-nexus-front.vercel.app",
     "https://www.ubuntunow.rw",
 ]
+
+# Pesapal Integration
+PESAPAL_ENV = os.environ.get("PESAPAL_ENV", "sandbox")
+PESAPAL_CONSUMER_KEY = os.environ.get("PESAPAL_CONSUMER_KEY")
+PESAPAL_CONSUMER_SECRET = os.environ.get("PESAPAL_CONSUMER_SECRET")
+BACKEND_URL = os.environ.get("BACKEND_URL", "https://api-gatewayubuntunow-platform-be-production.up.railway.app")

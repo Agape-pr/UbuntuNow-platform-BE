@@ -10,4 +10,4 @@ class PaymentSerializer(serializers.ModelSerializer):
 class InitiatePaymentSerializer(serializers.Serializer):
     order_id = serializers.IntegerField()
     payment_method = serializers.ChoiceField(choices=Payment.Method.choices)
-    phone_number = serializers.CharField(max_length=20) # For MoMo push
+    phone_number = serializers.CharField(max_length=20, required=False) # For MoMo push
