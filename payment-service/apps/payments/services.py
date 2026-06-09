@@ -78,7 +78,7 @@ class PesapalService:
                 logger.error(f"Response Body: {e.response.text}")
             raise Exception("Failed to register IPN with Pesapal")
 
-    def submit_order(self, payment, order):
+    def submit_order(self, payment, order_data, user):
         """
         Submits an order to Pesapal and returns the redirect_url for the payment iframe
         along with the OrderTrackingId.
@@ -104,19 +104,19 @@ class PesapalService:
             "id": f"{payment.id}-{payment.order_id}",
             "currency": "RWF",
             "amount": float(payment.payment_amount),
-            "description": f"Payment for Order #{order.id}",
+            "description": f"Payment for Order #{payment.order_id}",
             "callback_url": callback_url,
             "notification_id": ipn_id,
             "billing_address": {
-                "email_address": getattr(order.buyer, 'email', 'customer@ubuntunow.rw'),
-                "phone_number": getattr(order.buyer, 'phone_number', ''),
+                "email_address": getattr(user, 'email', 'customer@ubuntunow.rw'),
+                "phone_number": getattr(user, 'phone_number', ''),
                 "country_code": "RW",
-                "first_name": getattr(order.buyer, 'first_name', 'Customer'),
+                "first_name": getattr(user, 'first_name', 'Customer'),
                 "middle_name": "",
-                "last_name": getattr(order.buyer, 'last_name', ''),
-                "line_1": getattr(order.buyer, 'address_line1', ''),
+                "last_name": getattr(user, 'last_name', ''),
+                "line_1": order_data.get('delivery_address', {}).get('address_line1', ''),
                 "line_2": "",
-                "city": getattr(order.buyer, 'city', ''),
+                "city": order_data.get('delivery_address', {}).get('city', ''),
                 "state": "",
                 "postal_code": "",
                 "zip_code": ""
