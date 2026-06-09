@@ -88,10 +88,20 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             except Exception as e:
                 logger.error(f"Store service unreachable: {e}")
         return user
+class UserProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        from .models import UserProfile
+        model = UserProfile
+        fields = ['first_name', 'last_name', 'address_line1', 'address_line2', 'city', 'country']
+
 class UserDetailSerializer(serializers.ModelSerializer):
     store = serializers.SerializerMethodField()
-    
-    
+    first_name = serializers.CharField(source='profile.first_name', required=False, allow_blank=True)
+    last_name = serializers.CharField(source='profile.last_name', required=False, allow_blank=True)
+    address_line1 = serializers.CharField(source='profile.address_line1', required=False, allow_blank=True)
+    address_line2 = serializers.CharField(source='profile.address_line2', required=False, allow_blank=True)
+    city = serializers.CharField(source='profile.city', required=False, allow_blank=True)
+    country = serializers.CharField(source='profile.country', required=False, allow_blank=True)
     def get_store(self, obj):
         if obj.role == 'seller':
             try:
@@ -105,7 +115,27 @@ class UserDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'role', 'phone_number', 'store', 'is_superuser', 'admin_permissions']
+        fields = [
+            'id', 'email', 'role', 'phone_number', 'store', 'is_superuser', 'admin_permissions',
+            'first_name', 'last_name', 'address_line1', 'address_line2', 'city', 'country'
+        ]
+
+    def update(self, instance, validated_data):
+        profile_data = validated_data.pop('profile', {})
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        if profile_data:
+            profile = getattr(instance, 'profile', None)
+            if profile:
+                for attr, value in profile_data.items():
+                    setattr(profile, attr, value)
+                profile.save()
+            else:
+                from .models import UserProfile
+                UserProfile.objects.create(user=instance, **profile_data)
+        return instance
 
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
