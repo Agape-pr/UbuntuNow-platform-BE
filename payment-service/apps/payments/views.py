@@ -109,24 +109,36 @@ class PesapalIPNWebhookView(views.APIView):
             
             # 2. Find our local Payment record
             payment = get_object_or_404(Payment, transaction_id=order_tracking_id)
-            order = payment.order
             
             # 3. Update our Payment based on Pesapal's status
             # Pesapal status codes: 0=INVALID, 1=COMPLETED, 2=FAILED, 3=REVERSED
+            order_service_url = getattr(settings, 'ORDER_SERVICE_URL', 'http://localhost:8004')
+            
             if payment_status_code == 1:
                 payment.payment_status = Payment.Status.COMPLETED
                 payment.save()
                 
-                # Update Order to PAID
-                order.payment_status = 'paid'
-                order.status = 'confirmed' # Or whatever logic
-                order.save()
+                # Update Order to PAID via internal endpoint
+                try:
+                    requests.patch(
+                        f"{order_service_url}/api/v1/orders/internal/{payment.order_id}/update-payment/",
+                        json={'payment_status': 'paid', 'status': 'confirmed'},
+                        timeout=5
+                    )
+                except Exception as e:
+                    print(f"Failed to update order-service: {e}")
             elif payment_status_code in [0, 2, 3]:
                 payment.payment_status = Payment.Status.FAILED
                 payment.save()
                 
-                order.payment_status = 'failed'
-                order.save()
+                try:
+                    requests.patch(
+                        f"{order_service_url}/api/v1/orders/internal/{payment.order_id}/update-payment/",
+                        json={'payment_status': 'failed'},
+                        timeout=5
+                    )
+                except Exception as e:
+                    print(f"Failed to update order-service: {e}")
 
             # 4. Acknowledge the IPN so Pesapal stops retrying
             return Response({

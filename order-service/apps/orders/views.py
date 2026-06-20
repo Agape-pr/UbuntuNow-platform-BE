@@ -207,3 +207,25 @@ class SellerOrderViewSet(viewsets.ReadOnlyModelViewSet):
             order.save()
             return Response({'status': 'updated'})
         return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
+
+class InternalOrderViewSet(viewsets.ModelViewSet):
+    queryset = Order.objects.all()
+    serializer_class = OrderSerializer
+    permission_classes = [permissions.AllowAny] # Internal service-to-service communication
+
+    @decorators.action(detail=True, methods=['patch'], url_path='update-payment')
+    def update_payment(self, request, pk=None):
+        try:
+            order = self.get_object()
+            payment_status = request.data.get('payment_status')
+            status_val = request.data.get('status')
+            
+            if payment_status:
+                order.payment_status = payment_status
+            if status_val:
+                order.status = status_val
+                
+            order.save()
+            return Response({'status': 'updated'})
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)

@@ -1,10 +1,11 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import OrderViewSet, SellerOrderViewSet
+from .views import OrderViewSet, SellerOrderViewSet, InternalOrderViewSet
 
 router = DefaultRouter()
 router.register(r'orders', OrderViewSet, basename='orders')
 router.register(r'seller/orders', SellerOrderViewSet, basename='seller-orders')
+router.register(r'internal', InternalOrderViewSet, basename='internal-orders')
 
 # We can alias checkout and mock-payment to avoid the 'orders/orders/' double prefix
 urlpatterns = [
