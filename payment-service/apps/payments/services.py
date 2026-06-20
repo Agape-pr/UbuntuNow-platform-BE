@@ -36,6 +36,10 @@ class PesapalService:
             response = requests.post(url, json=payload, headers=headers, timeout=10)
             response.raise_for_status()
             data = response.json()
+            
+            if data.get("error"):
+                raise Exception(f"Pesapal Error: {data['error'].get('message', data['error'].get('code'))}")
+                
             return data.get("token")
         except requests.exceptions.RequestException as e:
             logger.error(f"Pesapal Auth Error: {e}")
@@ -70,6 +74,10 @@ class PesapalService:
             response = requests.post(url, json=payload, headers=headers, timeout=10)
             response.raise_for_status()
             data = response.json()
+            
+            if data.get("error"):
+                raise Exception(f"Pesapal Error: {data['error'].get('message', data['error'].get('code'))}")
+                
             # Returns an ipn_id that we must pass when submitting orders
             return data.get("ipn_id")
         except requests.exceptions.RequestException as e:
@@ -127,6 +135,10 @@ class PesapalService:
             response = requests.post(url, json=payload, headers=headers, timeout=15)
             response.raise_for_status()
             data = response.json()
+            
+            if data.get("error"):
+                raise Exception(f"Pesapal Error: {data['error'].get('message', data['error'].get('code'))}")
+                
             # The API returns 'order_tracking_id' and 'redirect_url'
             return data
         except requests.exceptions.RequestException as e:
