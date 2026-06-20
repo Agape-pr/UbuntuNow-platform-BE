@@ -21,8 +21,8 @@ class InitiatePaymentView(views.APIView):
             auth_header = request.headers.get('Authorization')
             headers = {'Authorization': auth_header} if auth_header else {}
             # order-service expects requests to its internal endpoint, e.g. /api/v1/orders/{order_id}/
-            # However, order-service urls might be different. Let's assume it supports GET /api/v1/orders/{order_id}/
-            res = requests.get(f"{order_service_url}/api/v1/orders/{order_id}/", headers=headers, timeout=10)
+            # order-service expects requests to its internal endpoint, e.g. /api/v1/orders/orders/{order_id}/
+            res = requests.get(f"{order_service_url}/api/v1/orders/orders/{order_id}/", headers=headers, timeout=10)
             if res.status_code == 404:
                 return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
             res.raise_for_status()
