@@ -98,8 +98,8 @@ class PesapalService:
         # For this setup, we'll quickly register the IPN to ensure it's always valid.
         ipn_id = self.register_ipn()
         
-        backend_url = getattr(settings, 'BACKEND_URL', 'https://api-gatewayubuntunow-platform-be-production.up.railway.app').rstrip('/')
-        callback_url = f"{backend_url.replace('api-gateway', 'ubuntu-nexus-front')}/checkout/callback" # We'll direct back to the frontend
+        frontend_url = getattr(settings, 'FRONTEND_URL', 'https://dev.ubuntunow.rw').rstrip('/')
+        callback_url = f"{frontend_url}/checkout/callback" # We'll direct back to the frontend
 
         headers = {
             "Accept": "application/json",
