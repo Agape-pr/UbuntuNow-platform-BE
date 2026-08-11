@@ -33,4 +33,3 @@ try:
     print("SUCCESS: user_id =", user.id)
 except Exception as e:
     print("FAILED:", type(e).__name__, str(e))
-
