@@ -42,6 +42,7 @@ class UserProfile(models.Model):
     last_name = models.CharField(max_length=100, blank=True)
     address_line1 = models.CharField(max_length=255, blank=True)
     address_line2 = models.CharField(max_length=255, blank=True)
+    landmark = models.CharField(max_length=255, blank=True, help_text="Popular/well-known nearby place used for delivery, e.g. 'near Kigali Heights'")
     city = models.CharField(max_length=100, blank=True)
     country = models.CharField(max_length=100, blank=True, default='Rwanda')
 

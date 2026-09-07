@@ -92,7 +92,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         from .models import UserProfile
         model = UserProfile
-        fields = ['first_name', 'last_name', 'address_line1', 'address_line2', 'city', 'country']
+        fields = ['first_name', 'last_name', 'address_line1', 'address_line2', 'landmark', 'city', 'country']
 
 class UserDetailSerializer(serializers.ModelSerializer):
     store = serializers.SerializerMethodField()
@@ -100,6 +100,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
     last_name = serializers.CharField(source='profile.last_name', required=False, allow_blank=True)
     address_line1 = serializers.CharField(source='profile.address_line1', required=False, allow_blank=True)
     address_line2 = serializers.CharField(source='profile.address_line2', required=False, allow_blank=True)
+    landmark = serializers.CharField(source='profile.landmark', required=False, allow_blank=True)
     city = serializers.CharField(source='profile.city', required=False, allow_blank=True)
     country = serializers.CharField(source='profile.country', required=False, allow_blank=True)
     def get_store(self, obj):
@@ -117,7 +118,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'email', 'role', 'phone_number', 'store', 'is_superuser', 'admin_permissions',
-            'first_name', 'last_name', 'address_line1', 'address_line2', 'city', 'country'
+            'first_name', 'last_name', 'address_line1', 'address_line2', 'landmark', 'city', 'country'
         ]
 
     def update(self, instance, validated_data):
