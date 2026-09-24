@@ -235,7 +235,5 @@ INTOUCH_ENV = os.environ.get("INTOUCH_ENV", "sandbox")
 INTOUCH_USERNAME = os.environ.get("INTOUCH_USERNAME")
 INTOUCH_ACCOUNT_NO = os.environ.get("INTOUCH_ACCOUNT_NO")
 INTOUCH_PARTNER_PASSWORD = os.environ.get("INTOUCH_PARTNER_PASSWORD")
-INTOUCH_CALLBACK_URL = os.environ.get(
-    "INTOUCH_CALLBACK_URL",
-    f"{BACKEND_URL.rstrip('/')}/api/v1/payments/payment/webhook/intouch/",
-)
+INTOUCH_CALLBACK_URL = os.environ.get("INTOUCH_CALLBACK_URL", "").strip() or \
+    f"{BACKEND_URL.rstrip('/')}/api/v1/payments/payment/webhook/intouch/"

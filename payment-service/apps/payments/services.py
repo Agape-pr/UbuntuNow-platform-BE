@@ -232,12 +232,17 @@ class IntouchPayService:
 
         try:
             response = requests.post(url, json=payload, headers=headers, timeout=15)
-            response.raise_for_status()
-            return response.json()
         except requests.exceptions.RequestException as e:
             logger.error(f"IntouchPay Request Payment Error: {e}")
-            if hasattr(e, 'response') and e.response is not None:
-                logger.error(f"Response Body: {e.response.text}")
+            raise Exception("Failed to reach IntouchPay")
+
+        # IntouchPay returns structured error JSON (success/responsecode/message)
+        # even on non-2xx statuses (e.g. 404 for "No such user") - parse it
+        # instead of treating the status code as a hard failure.
+        try:
+            return response.json()
+        except ValueError:
+            logger.error(f"IntouchPay Request Payment Error: HTTP {response.status_code} - {response.text}")
             raise Exception("Failed to request payment from IntouchPay")
 
 
