@@ -1,9 +1,14 @@
+import logging
+import uuid
 from rest_framework import views, status, permissions, generics
 from rest_framework.response import Response
 import requests
 from django.conf import settings
+from django.shortcuts import get_object_or_404
 from .models import Payment
 from .serializers import PaymentSerializer, InitiatePaymentSerializer
+
+logger = logging.getLogger(__name__)
 
 class InitiatePaymentView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -42,6 +47,7 @@ class InitiatePaymentView(views.APIView):
         
         # Integration Logic
         redirect_url = None
+        prompt_message = None
         if method == 'pesapal':
             from .services import pesapal_service
             try:
@@ -51,12 +57,42 @@ class InitiatePaymentView(views.APIView):
                 redirect_url = pesapal_response.get("redirect_url")
             except Exception as e:
                 return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+        elif method in ('momo', 'airtel'):
+            from .services import intouch_service
+            phone_number = serializer.validated_data.get('phone_number')
+            if not phone_number:
+                return Response({'error': 'phone_number is required for mobile money payments'}, status=status.HTTP_400_BAD_REQUEST)
+
+            request_transaction_id = f"UBN{payment.id}{uuid.uuid4().hex[:12]}"
+            try:
+                intouch_response = intouch_service.request_payment(
+                    amount=payment.payment_amount,
+                    mobile_phone=phone_number,
+                    request_transaction_id=request_transaction_id,
+                )
+            except Exception as e:
+                return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            if not intouch_response.get('success'):
+                payment.payment_status = Payment.Status.FAILED
+                payment.save()
+                return Response(
+                    {'error': intouch_response.get('message', 'Payment request failed')},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Stored (not IntouchPay's own transactionid) because the webhook
+            # callback is matched against requesttransactionid per their docs.
+            payment.transaction_id = request_transaction_id
+            payment.save()
+            prompt_message = intouch_response.get('message')
+
         return Response({
             'message': 'Payment initiated',
             'payment_id': payment.id,
             'status': payment.payment_status,
-            'redirect_url': redirect_url
+            'redirect_url': redirect_url,
+            'prompt_message': prompt_message,
         }, status=status.HTTP_201_CREATED)
 
 class PaymentStatusView(generics.RetrieveAPIView):
@@ -151,3 +187,72 @@ class PesapalIPNWebhookView(views.APIView):
         except Exception as e:
             # If we fail, return 500 so Pesapal retries later
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class IntouchWebhookView(views.APIView):
+    """
+    IntouchPay POSTs here once the subscriber approves/rejects the MoMo/Airtel
+    prompt on their phone. Must ack with {"message": "success", "success": true,
+    "request_id": ...} so IntouchPay stops retrying.
+    """
+    permission_classes = [permissions.AllowAny]  # Webhook is public
+
+    def post(self, request):
+        payload = request.data.get('jsonpayload', request.data)
+        request_transaction_id = payload.get('requesttransactionid')
+
+        if not request_transaction_id:
+            return Response({"error": "Missing requesttransactionid"}, status=status.HTTP_400_BAD_REQUEST)
+
+        payment = get_object_or_404(Payment, transaction_id=request_transaction_id)
+
+        # Idempotent: IntouchPay may redeliver the same callback.
+        if payment.payment_status in (Payment.Status.COMPLETED, Payment.Status.FAILED):
+            return Response({
+                "message": "success",
+                "success": True,
+                "request_id": request_transaction_id,
+            })
+
+        result_status = str(payload.get('status', '')).strip().lower()
+        response_code = str(payload.get('responsecode', ''))
+
+        # 'pending' is transient (rare) - don't resolve the payment yet, just ack.
+        if result_status == 'pending' or response_code == '1000':
+            return Response({
+                "message": "success",
+                "success": True,
+                "request_id": request_transaction_id,
+            })
+
+        is_successful = response_code == '01' or result_status.startswith('success')
+
+        order_service_url = getattr(settings, 'ORDER_SERVICE_URL', 'http://localhost:8004')
+
+        if is_successful:
+            payment.payment_status = Payment.Status.COMPLETED
+            payment.save()
+            try:
+                requests.patch(
+                    f"{order_service_url}/api/v1/orders/internal/{payment.order_id}/update-payment/",
+                    json={'payment_status': 'paid', 'status': 'confirmed'},
+                    timeout=5
+                )
+            except Exception as e:
+                logger.error(f"Failed to update order-service: {e}")
+        else:
+            payment.payment_status = Payment.Status.FAILED
+            payment.save()
+            try:
+                requests.patch(
+                    f"{order_service_url}/api/v1/orders/internal/{payment.order_id}/update-payment/",
+                    json={'payment_status': 'failed'},
+                    timeout=5
+                )
+            except Exception as e:
+                logger.error(f"Failed to update order-service: {e}")
+
+        return Response({
+            "message": "success",
+            "success": True,
+            "request_id": request_transaction_id,
+        })

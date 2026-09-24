@@ -229,3 +229,13 @@ PESAPAL_CONSUMER_SECRET = os.environ.get("PESAPAL_CONSUMER_SECRET")
 BACKEND_URL = os.environ.get("BACKEND_URL", "https://api-gatewayubuntunow-platform-be-production.up.railway.app")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://dev.ubuntunow.rw")
 ORDER_SERVICE_URL = os.environ.get("ORDER_SERVICE_URL", "http://localhost:8004")
+
+# IntouchPay Integration
+INTOUCH_ENV = os.environ.get("INTOUCH_ENV", "sandbox")
+INTOUCH_USERNAME = os.environ.get("INTOUCH_USERNAME")
+INTOUCH_ACCOUNT_NO = os.environ.get("INTOUCH_ACCOUNT_NO")
+INTOUCH_PARTNER_PASSWORD = os.environ.get("INTOUCH_PARTNER_PASSWORD")
+INTOUCH_CALLBACK_URL = os.environ.get(
+    "INTOUCH_CALLBACK_URL",
+    f"{BACKEND_URL.rstrip('/')}/api/v1/payments/payment/webhook/intouch/",
+)

@@ -1,5 +1,7 @@
+import hashlib
 import requests
 import logging
+from datetime import datetime, timezone
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -173,3 +175,70 @@ class PesapalService:
             raise Exception("Failed to retrieve transaction status from Pesapal")
 
 pesapal_service = PesapalService()
+
+
+class IntouchPayService:
+    """
+    Handles MTN MoMo / Airtel Money push payments via IntouchPay.
+    Docs: API Reference > Authentication, API Reference > Request a Payment.
+    """
+
+    def __init__(self):
+        self.env = getattr(settings, 'INTOUCH_ENV', 'sandbox').lower()
+        self.username = getattr(settings, 'INTOUCH_USERNAME', None)
+        self.account_no = getattr(settings, 'INTOUCH_ACCOUNT_NO', None)
+        self.partner_password = getattr(settings, 'INTOUCH_PARTNER_PASSWORD', None)
+        self.callback_url = getattr(settings, 'INTOUCH_CALLBACK_URL', None)
+
+        if self.env == 'sandbox':
+            self.base_url = "https://developer.intouchpay.co.rw/api/v1/sandbox"
+        else:
+            self.base_url = "https://www.intouchpay.co.rw/api"
+
+    def _get_timestamp(self):
+        # Required format: YYYYMMDDHHmmss (UTC)
+        return datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+
+    def _hash_password(self, timestamp):
+        if not (self.username and self.account_no and self.partner_password):
+            raise ValueError("INTOUCH_USERNAME, INTOUCH_ACCOUNT_NO or INTOUCH_PARTNER_PASSWORD is not configured.")
+        raw = f"{self.username}{self.account_no}{self.partner_password}{timestamp}"
+        return hashlib.sha256(raw.encode()).hexdigest()
+
+    def _auth_fields(self):
+        timestamp = self._get_timestamp()
+        return {
+            "username": self.username,
+            "accountno": self.account_no,
+            "timestamp": timestamp,
+            "password": self._hash_password(timestamp),
+        }
+
+    def request_payment(self, amount, mobile_phone, request_transaction_id):
+        """
+        Triggers a MoMo/Airtel push prompt on the payer's phone.
+        Returns the raw IntouchPay response (a 'Pending' request acknowledgement
+        only - the final payment status arrives later via the webhook callback).
+        """
+        url = f"{self.base_url}/requestpayment/"
+        payload = {
+            **self._auth_fields(),
+            "amount": float(amount),
+            "mobilephone": mobile_phone,
+            "requesttransactionid": request_transaction_id,
+            "callbackurl": self.callback_url,
+        }
+        headers = {"Content-Type": "application/json"}
+
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=15)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            logger.error(f"IntouchPay Request Payment Error: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                logger.error(f"Response Body: {e.response.text}")
+            raise Exception("Failed to request payment from IntouchPay")
+
+
+intouch_service = IntouchPayService()
