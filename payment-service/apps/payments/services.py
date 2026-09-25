@@ -245,5 +245,61 @@ class IntouchPayService:
             logger.error(f"IntouchPay Request Payment Error: HTTP {response.status_code} - {response.text}")
             raise Exception("Failed to request payment from IntouchPay")
 
+    def get_transaction_status(self, request_transaction_id, transaction_id):
+        """
+        Manual reconciliation fallback for when a webhook callback is missed.
+        Not used in the normal payment flow - the webhook is the source of truth.
+        """
+        url = f"{self.base_url}/gettransactionstatus/"
+        payload = {
+            **self._auth_fields(),
+            "requesttransactionid": request_transaction_id,
+            "transactionid": transaction_id,
+        }
+        headers = {"Content-Type": "application/json"}
+
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=15)
+        except requests.exceptions.RequestException as e:
+            logger.error(f"IntouchPay Get Transaction Status Error: {e}")
+            raise Exception("Failed to reach IntouchPay")
+
+        try:
+            return response.json()
+        except ValueError:
+            logger.error(f"IntouchPay Get Transaction Status Error: HTTP {response.status_code} - {response.text}")
+            raise Exception("Failed to retrieve transaction status from IntouchPay")
+
+    def send_deposit(self, amount, mobile_phone, request_transaction_id, reason, withdraw_charge=0, sid=1):
+        """
+        B2C push - disburses funds directly to a mobile money wallet, no
+        approval needed. Not yet wired into any view; intended for the
+        escrow "release to seller" step once seller payout numbers exist.
+        """
+        url = f"{self.base_url}/requestdeposit/"
+        payload = {
+            **self._auth_fields(),
+            "amount": float(amount),
+            "mobilephone": mobile_phone,
+            "requesttransactionid": request_transaction_id,
+            "callbackurl": self.callback_url,
+            "reason": reason,
+            "withdrawcharge": withdraw_charge,
+            "sid": sid,
+        }
+        headers = {"Content-Type": "application/json"}
+
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=15)
+        except requests.exceptions.RequestException as e:
+            logger.error(f"IntouchPay Send Deposit Error: {e}")
+            raise Exception("Failed to reach IntouchPay")
+
+        try:
+            return response.json()
+        except ValueError:
+            logger.error(f"IntouchPay Send Deposit Error: HTTP {response.status_code} - {response.text}")
+            raise Exception("Failed to send deposit via IntouchPay")
+
 
 intouch_service = IntouchPayService()
