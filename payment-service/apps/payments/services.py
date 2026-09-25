@@ -301,5 +301,26 @@ class IntouchPayService:
             logger.error(f"IntouchPay Send Deposit Error: HTTP {response.status_code} - {response.text}")
             raise Exception("Failed to send deposit via IntouchPay")
 
+    def get_balance(self):
+        """
+        Live balance of the IntouchPay merchant account (sandbox or
+        production, depending on INTOUCH_ENV). Used by the admin dashboard.
+        """
+        url = f"{self.base_url}/getbalance/"
+        payload = self._auth_fields()
+        headers = {"Content-Type": "application/json"}
+
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=15)
+        except requests.exceptions.RequestException as e:
+            logger.error(f"IntouchPay Get Balance Error: {e}")
+            raise Exception("Failed to reach IntouchPay")
+
+        try:
+            return response.json()
+        except ValueError:
+            logger.error(f"IntouchPay Get Balance Error: HTTP {response.status_code} - {response.text}")
+            raise Exception("Failed to retrieve balance from IntouchPay")
+
 
 intouch_service = IntouchPayService()

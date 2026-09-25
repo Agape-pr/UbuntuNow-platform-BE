@@ -111,6 +111,24 @@ class PaymentStatusView(generics.RetrieveAPIView):
         # We will assume payment lookup is safe enough since ID is a UUID/Primary Key.
         return payment
 
+class IntouchBalanceView(views.APIView):
+    """
+    Live IntouchPay merchant account balance, for the admin dashboard.
+    """
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request):
+        from .services import intouch_service
+        try:
+            result = intouch_service.get_balance()
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        if not result.get('success'):
+            return Response({'error': result.get('message', 'Failed to fetch balance')}, status=status.HTTP_502_BAD_GATEWAY)
+
+        return Response({'balance': result.get('balance')})
+
 class ReleasablePaymentsView(generics.ListAPIView):
     """
     Payments held in escrow (COMPLETED) and awaiting an admin to release
