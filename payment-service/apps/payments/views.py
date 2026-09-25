@@ -111,19 +111,86 @@ class PaymentStatusView(generics.RetrieveAPIView):
         # We will assume payment lookup is safe enough since ID is a UUID/Primary Key.
         return payment
 
+class ReleasablePaymentsView(generics.ListAPIView):
+    """
+    Payments held in escrow (COMPLETED) and awaiting an admin to release
+    funds to the seller.
+    """
+    serializer_class = PaymentSerializer
+    permission_classes = [permissions.IsAdminUser]
+    queryset = Payment.objects.filter(payment_status=Payment.Status.COMPLETED).order_by('-payment_date')
+
 class ReleasePaymentView(views.APIView):
-    # This might be automatic or admin triggered, or via confirm-receipt
-    permission_classes = [permissions.IsAdminUser] # Restricted for now
+    # Admin-triggered: pays out the seller's mobile money wallet via
+    # IntouchPay's send_deposit (B2C push), then marks the payment RELEASED.
+    permission_classes = [permissions.IsAdminUser]
 
     def post(self, request):
         payment_id = request.data.get('payment_id')
         payment = get_object_or_404(Payment, id=payment_id)
-        
-        if payment.payment_status == Payment.Status.COMPLETED: # Held
-            payment.payment_status = Payment.Status.RELEASED
-            payment.save()
-            return Response({'status': 'released'})
-        return Response({'error': 'Cannot release funds'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if payment.payment_status != Payment.Status.COMPLETED:
+            return Response({'error': 'Payment is not held in escrow'}, status=status.HTTP_400_BAD_REQUEST)
+
+        order_service_url = getattr(settings, 'ORDER_SERVICE_URL', 'http://localhost:8004')
+        store_service_url = getattr(settings, 'STORE_SERVICE_URL', 'http://localhost:8002')
+
+        try:
+            order_res = requests.get(
+                f"{order_service_url}/api/v1/orders/internal/{payment.order_id}/",
+                timeout=10
+            )
+            order_res.raise_for_status()
+            store_id = order_res.json().get('store_id')
+        except Exception as e:
+            return Response({'error': f"Failed to fetch order details: {str(e)}"}, status=status.HTTP_502_BAD_GATEWAY)
+
+        if not store_id:
+            return Response({'error': 'Order is missing a store_id'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            store_res = requests.get(
+                f"{store_service_url}/api/v1/users/internal/stores/by-id/{store_id}/",
+                timeout=10
+            )
+            if store_res.status_code == 404:
+                return Response({'error': 'Seller store not found'}, status=status.HTTP_400_BAD_REQUEST)
+            store_res.raise_for_status()
+            payout_phone_number = store_res.json().get('payout_phone_number')
+        except Exception as e:
+            return Response({'error': f"Failed to fetch seller store: {str(e)}"}, status=status.HTTP_502_BAD_GATEWAY)
+
+        if not payout_phone_number:
+            return Response(
+                {'error': "Seller has not set a payout phone number for their store yet"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from .services import intouch_service
+        request_transaction_id = f"REL{payment.id}{uuid.uuid4().hex[:12]}"
+        try:
+            deposit_response = intouch_service.send_deposit(
+                amount=payment.payment_amount,
+                mobile_phone=payout_phone_number,
+                request_transaction_id=request_transaction_id,
+                reason=f"UbuntuNow payout for Order #{payment.order_id}",
+            )
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        if not deposit_response.get('success'):
+            return Response(
+                {'error': deposit_response.get('message', 'Payout failed')},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        payment.payment_status = Payment.Status.RELEASED
+        payment.save()
+        return Response({
+            'status': 'released',
+            'transactionid': deposit_response.get('transactionid'),
+            'referenceno': deposit_response.get('referenceno'),
+        })
 
 class PesapalIPNWebhookView(views.APIView):
     """

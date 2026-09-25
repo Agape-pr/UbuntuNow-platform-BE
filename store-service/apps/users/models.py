@@ -9,6 +9,10 @@ class Store(models.Model):
     slug = models.SlugField(unique=True, blank=True, null=True)
     store_logo = models.ImageField(upload_to='store_logos/', blank=True, null=True)
     store_description = models.TextField(blank=True)
+    payout_phone_number = models.CharField(
+        max_length=20, blank=True, null=True,
+        help_text="Mobile money number (e.g. 2507XXXXXXXX) escrow releases are paid out to."
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

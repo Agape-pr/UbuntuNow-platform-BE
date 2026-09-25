@@ -22,7 +22,7 @@ class StoreSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Store
-        fields = ['id', 'user_id', 'store_name', 'slug', 'store_description', 'store_logo']
+        fields = ['id', 'user_id', 'store_name', 'slug', 'store_description', 'store_logo', 'payout_phone_number']
 
     def to_internal_value(self, data):
         # Normalize empty strings to None for optional fields

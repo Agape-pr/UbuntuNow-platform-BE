@@ -229,6 +229,7 @@ PESAPAL_CONSUMER_SECRET = os.environ.get("PESAPAL_CONSUMER_SECRET")
 BACKEND_URL = os.environ.get("BACKEND_URL", "https://api-gatewayubuntunow-platform-be-production.up.railway.app")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://dev.ubuntunow.rw")
 ORDER_SERVICE_URL = os.environ.get("ORDER_SERVICE_URL", "http://localhost:8004")
+STORE_SERVICE_URL = os.environ.get("STORE_SERVICE_URL", "http://localhost:8002")
 
 # IntouchPay Integration
 INTOUCH_ENV = os.environ.get("INTOUCH_ENV", "sandbox")

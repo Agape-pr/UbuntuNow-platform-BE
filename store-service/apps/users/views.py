@@ -24,6 +24,20 @@ class InternalStoreRetrieveView(APIView):
         except Store.DoesNotExist:
             return Response({"detail": "Not found"}, status=404)
 
+class InternalStoreRetrieveByIdView(APIView):
+    """
+    Looks up a Store by its own PK, not user_id. Orders/products reference
+    stores by Store.id, so this is what payment-service uses to find a
+    seller's payout number for escrow releases.
+    """
+    permission_classes = [AllowAny]
+    def get(self, request, store_id):
+        try:
+            store = Store.objects.get(id=store_id)
+            return Response(StoreSerializer(store).data)
+        except Store.DoesNotExist:
+            return Response({"detail": "Not found"}, status=404)
+
 class PublicStoreView(generics.RetrieveAPIView):
     queryset = Store.objects.all()
     serializer_class = PublicStoreSerializer
