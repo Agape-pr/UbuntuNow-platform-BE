@@ -31,6 +31,16 @@ const proxy = (pathPrefix, target) =>
         pathFilter: pathPrefix,
     });
 
+// Internal service-to-service endpoints (unauthenticated by design) must never be
+// reachable from the public internet. Services call each other directly via their
+// *_SERVICE_URL, not through this gateway.
+app.use((req, res, next) => {
+    if (/(^|\/)internal(\/|$)/.test(req.path)) {
+        return res.status(404).json({ detail: 'Not found.' });
+    }
+    next();
+});
+
 // Routing — order matters: more-specific paths first
 app.use(proxy('/api/v1/auth', services.auth));
 app.use(proxy('/api/v1/users/store', services.store));
