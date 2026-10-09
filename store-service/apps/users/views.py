@@ -5,9 +5,10 @@ from rest_framework import status
 from .models import Store
 from .serializers import StoreSerializer, PublicStoreSerializer
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from shared.core.utils.internal import IsInternalService
 
 class InternalStoreCreateView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsInternalService]
     def post(self, request):
         serializer = StoreSerializer(data=request.data)
         if serializer.is_valid():
@@ -16,7 +17,7 @@ class InternalStoreCreateView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class InternalStoreRetrieveView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsInternalService]
     def get(self, request, user_id):
         try:
             store = Store.objects.get(user_id=user_id)
@@ -30,7 +31,7 @@ class InternalStoreRetrieveByIdView(APIView):
     stores by Store.id, so this is what payment-service uses to find a
     seller's payout number for escrow releases.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsInternalService]
     def get(self, request, store_id):
         try:
             store = Store.objects.get(id=store_id)

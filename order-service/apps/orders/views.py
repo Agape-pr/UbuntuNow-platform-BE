@@ -1,10 +1,11 @@
-from rest_framework import viewsets, permissions, status, decorators
+from rest_framework import viewsets, mixins, permissions, status, decorators
 from rest_framework.response import Response
 from django.db import transaction
 import requests
 import os
 from .models import Order, OrderItem
 from .serializers import OrderSerializer, CheckoutSerializer
+from shared.core.utils.internal import IsInternalService, internal_headers
 
 class OrderViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
@@ -91,6 +92,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                         requests.patch(
                             f"{product_service_url}/api/v1/products/internal/stock/{prod.get('id')}/", 
                             json={'stock_quantity': new_stock},
+                            headers=internal_headers(),
                             timeout=5
                         )
                     except Exception as e:
@@ -186,7 +188,7 @@ class SellerOrderViewSet(viewsets.ReadOnlyModelViewSet):
             import requests
             try:
                 store_url = os.environ.get('STORE_SERVICE_URL', 'http://store-service:8002')
-                res = requests.get(f"{store_url}/api/v1/users/internal/stores/{self.request.user.id}/", timeout=2)
+                res = requests.get(f"{store_url}/api/v1/users/internal/stores/{self.request.user.id}/", headers=internal_headers(), timeout=2)
                 if res.status_code == 200:
                     store_data = res.json()
                     if store_data.get('id'):
@@ -208,10 +210,11 @@ class SellerOrderViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({'status': 'updated'})
         return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
 
-class InternalOrderViewSet(viewsets.ModelViewSet):
+class InternalOrderViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    # Internal service-to-service communication only: retrieve + update-payment.
     queryset = Order.objects.all()
     serializer_class = OrderSerializer
-    permission_classes = [permissions.AllowAny] # Internal service-to-service communication
+    permission_classes = [IsInternalService]
 
     @decorators.action(detail=True, methods=['patch'], url_path='update-payment')
     def update_payment(self, request, pk=None):

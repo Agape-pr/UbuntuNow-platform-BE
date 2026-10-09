@@ -50,3 +50,10 @@ PRODUCT_SERVICE_URL=http://product-service.railway.internal:8000
 *(Railway provides a `<service-name>.railway.internal` network for services in the same project).*
 
 By routing traffic to your **API Gateway's Public Domain**, your frontend will hit `/api/v1/auth`, which smoothly redirects internally to the isolated Auth Microservice!
+
+## 5. Internal Service Token (required)
+Internal service-to-service endpoints (`.../internal/...`) require a shared secret in the `X-Internal-Token` header. Set the **same** value as `INTERNAL_SERVICE_TOKEN` on **every** service (auth, store, product, order, payment, notification) — and in your local `.env` for docker-compose.
+
+Generate one with: `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`
+
+If it is missing or differs between services, internal calls are rejected (fail closed): orders will not be marked paid after a payment, seller payouts cannot be released, and seller JWTs will lack `store_id`.

@@ -18,6 +18,7 @@ Usage:
 
 import os
 import requests
+from shared.core.utils.internal import internal_headers
 from django.core.management.base import BaseCommand
 from apps.products.models import Product
 
@@ -66,6 +67,7 @@ class Command(BaseCommand):
             try:
                 res = requests.get(
                     f"{store_url}/api/v1/users/internal/stores/{wrong_store_id}/",
+                    headers=internal_headers(),
                     timeout=5,
                 )
             except Exception as e:

@@ -7,6 +7,7 @@ from django.conf import settings
 from django.shortcuts import get_object_or_404
 from .models import Payment
 from .serializers import PaymentSerializer, InitiatePaymentSerializer
+from shared.core.utils.internal import internal_headers
 
 logger = logging.getLogger(__name__)
 
@@ -156,6 +157,7 @@ class ReleasePaymentView(views.APIView):
         try:
             order_res = requests.get(
                 f"{order_service_url}/api/v1/orders/internal/{payment.order_id}/",
+                headers=internal_headers(),
                 timeout=10
             )
             order_res.raise_for_status()
@@ -169,6 +171,7 @@ class ReleasePaymentView(views.APIView):
         try:
             store_res = requests.get(
                 f"{store_service_url}/api/v1/users/internal/stores/by-id/{store_id}/",
+                headers=internal_headers(),
                 timeout=10
             )
             if store_res.status_code == 404:
@@ -244,6 +247,7 @@ class PesapalIPNWebhookView(views.APIView):
                     requests.patch(
                         f"{order_service_url}/api/v1/orders/internal/{payment.order_id}/update-payment/",
                         json={'payment_status': 'paid', 'status': 'confirmed'},
+                        headers=internal_headers(),
                         timeout=5
                     )
                 except Exception as e:
@@ -256,6 +260,7 @@ class PesapalIPNWebhookView(views.APIView):
                     requests.patch(
                         f"{order_service_url}/api/v1/orders/internal/{payment.order_id}/update-payment/",
                         json={'payment_status': 'failed'},
+                        headers=internal_headers(),
                         timeout=5
                     )
                 except Exception as e:
@@ -320,6 +325,7 @@ class IntouchWebhookView(views.APIView):
                 requests.patch(
                     f"{order_service_url}/api/v1/orders/internal/{payment.order_id}/update-payment/",
                     json={'payment_status': 'paid', 'status': 'confirmed'},
+                    headers=internal_headers(),
                     timeout=5
                 )
             except Exception as e:
@@ -331,6 +337,7 @@ class IntouchWebhookView(views.APIView):
                 requests.patch(
                     f"{order_service_url}/api/v1/orders/internal/{payment.order_id}/update-payment/",
                     json={'payment_status': 'failed'},
+                    headers=internal_headers(),
                     timeout=5
                 )
             except Exception as e:

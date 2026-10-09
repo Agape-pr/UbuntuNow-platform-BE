@@ -4,6 +4,7 @@ from django.shortcuts import get_object_or_404
 
 from .models import Product
 from .serializers import ProductSerializer, ProductCreateUpdateSerializer
+from shared.core.utils.internal import IsInternalService, internal_headers
 
 
 
@@ -44,6 +45,7 @@ class IsSeller(permissions.BasePermission):
         try:
             res = http_requests.get(
                 f"{store_url}/api/v1/users/internal/stores/{user_id}/",
+                headers=internal_headers(),
                 timeout=3,
             )
             print(f"IsSeller: store-service responded {res.status_code} — {res.text[:200]}")
@@ -133,7 +135,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 @api_view(['PATCH'])
-@permission_classes([permissions.AllowAny])
+@permission_classes([IsInternalService])
 def update_stock_internal(request, id):
     # This endpoint is only called internally by order-service to deduct stock
     # bypassing the IsSeller permission check.

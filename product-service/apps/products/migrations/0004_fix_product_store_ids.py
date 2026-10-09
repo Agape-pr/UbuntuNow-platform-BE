@@ -18,6 +18,7 @@ It is safe to run multiple times (idempotent).
 from django.db import migrations
 import os
 import requests as http_requests
+from shared.core.utils.internal import internal_headers
 
 
 def fix_store_ids(apps, schema_editor):
@@ -36,6 +37,7 @@ def fix_store_ids(apps, schema_editor):
             # Ask store-service: does a store exist where user_id = candidate_id ?
             res = http_requests.get(
                 f"{store_url}/api/v1/users/internal/stores/{candidate_id}/",
+                headers=internal_headers(),
                 timeout=5,
             )
         except Exception as e:

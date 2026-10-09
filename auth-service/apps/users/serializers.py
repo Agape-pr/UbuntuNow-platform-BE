@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 import requests
 import os
 import logging
+from shared.core.utils.internal import internal_headers
 logger = logging.getLogger(__name__)
 
 User = get_user_model()
@@ -82,7 +83,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             try:
                 store_data['user_id'] = user.id
                 store_url = os.environ.get('STORE_SERVICE_URL', 'http://store-service:8002')
-                res = requests.post(f"{store_url}/api/v1/users/internal/stores/", json=store_data, timeout=5)
+                res = requests.post(f"{store_url}/api/v1/users/internal/stores/", json=store_data, headers=internal_headers(), timeout=5)
                 if res.status_code not in [200, 201]:
                     logger.error(f"Failed to create store: {res.text}")
             except Exception as e:
@@ -107,7 +108,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
         if obj.role == 'seller':
             try:
                 store_url = os.environ.get('STORE_SERVICE_URL', 'http://store-service:8002')
-                res = requests.get(f"{store_url}/api/v1/users/internal/stores/{obj.id}/", timeout=2)
+                res = requests.get(f"{store_url}/api/v1/users/internal/stores/{obj.id}/", headers=internal_headers(), timeout=2)
                 if res.status_code == 200:
                     return res.json()
             except Exception:
@@ -154,7 +155,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             try:
                 store_url = os.environ.get('STORE_SERVICE_URL', 'http://store-service:8002')
                 # Try fetching store via internal network
-                res = requests.get(f"{store_url}/api/v1/users/internal/stores/{user.id}/", timeout=2)
+                res = requests.get(f"{store_url}/api/v1/users/internal/stores/{user.id}/", headers=internal_headers(), timeout=2)
                 if res.status_code == 200:
                     token['store_id'] = res.json().get('id')
             except Exception as e:
@@ -182,6 +183,7 @@ class AdminUserSerializer(serializers.ModelSerializer):
                 store_url = os.environ.get('STORE_SERVICE_URL', 'http://store-service:8002')
                 res = requests.get(
                     f"{store_url}/api/v1/users/internal/stores/{obj.id}/",
+                    headers=internal_headers(),
                     timeout=3
                 )
                 if res.status_code == 200:
