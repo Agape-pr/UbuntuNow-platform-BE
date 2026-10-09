@@ -57,3 +57,14 @@ Internal service-to-service endpoints (`.../internal/...`) require a shared secr
 Generate one with: `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`
 
 If it is missing or differs between services, internal calls are rejected (fail closed): orders will not be marked paid after a payment, seller payouts cannot be released, and seller JWTs will lack `store_id`.
+
+## 6. API Gateway Settings (optional variables)
+Set these on the **API Gateway** service. All have safe defaults.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `CORS_ALLOWED_ORIGINS` | `www.ubuntunow.rw`, `ubuntunow.rw`, `dev.ubuntunow.rw`, `admin.ubuntunow.rw`, `ubuntu-nexus-front.vercel.app`, localhost:3000/8080 | Comma-separated list of browser origins allowed to call the API. Setting it **replaces** the defaults, so include every frontend. |
+| `EXPOSE_DOCS` | off | Set to `true` to serve `/api/docs`, `/api/schema`, `/api/redoc`. Leave off in production unless needed. |
+| `RATE_LIMIT_AUTH` | `30` | Max login/register/OTP requests per IP per 15 min. |
+| `RATE_LIMIT_GENERAL` | `1000` | Max other requests per IP per 15 min. Payment webhooks and `/health` are never limited. |
+| `MAX_BODY_MB` | `25` | Max request body size. |

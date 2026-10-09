@@ -2,6 +2,8 @@ FROM node:18-alpine
 
 WORKDIR /app
 
+ENV NODE_ENV=production
+
 # Copy package files from the api-gateway directory
 COPY api-gateway/package*.json ./
 RUN npm install --production
