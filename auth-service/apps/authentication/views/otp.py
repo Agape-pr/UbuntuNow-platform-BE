@@ -128,6 +128,14 @@ class VerifyEmailOTPView(GenericAPIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        # Admins must sign in through the admin portal (password + emailed code).
+        # An emailed code alone must never yield an admin session.
+        if user.role == User.Role.ADMIN:
+            return Response(
+                {"detail": "Admin accounts must sign in through the admin portal."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         from apps.users.serializers import CustomTokenObtainPairSerializer
         refresh = CustomTokenObtainPairSerializer.get_token(user)
 

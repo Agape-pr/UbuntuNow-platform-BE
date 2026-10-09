@@ -321,3 +321,30 @@ class CatalogueAndSetupTests(AdminTestBase):
         self.buyer.refresh_from_db()
         self.assertEqual((self.buyer.role, self.buyer.is_superuser), ('admin', True))
         self.assertTrue(AuditLog.objects.filter(action='admin.setup').exists())
+
+
+class OtpVerifyCannotMintAdminSessionTests(AdminTestBase):
+    """An emailed code alone must never give an admin session (no password, no admin flow)."""
+
+    def request_and_verify(self, email, purpose):
+        with mock.patch('apps.authentication.services.otp_service.send_otp_email') as send:
+            sent = self.client.post('/api/v1/auth/otp/email/send/', {'email': email, 'purpose': purpose}, format='json')
+        self.assertEqual(sent.status_code, 200, sent.content)
+        otp = send.call_args.kwargs['otp']
+        return self.client.post('/api/v1/auth/otp/verify/', {'email': email, 'purpose': purpose, 'otp': otp}, format='json')
+
+    def test_admin_cannot_get_tokens_from_login_or_reset_codes(self):
+        for purpose in ('login', 'reset_password'):
+            resp = self.request_and_verify('root@example.com', purpose)
+            self.assertEqual(resp.status_code, 403, purpose)
+            self.assertNotIn('access', resp.json())
+
+    def test_buyers_still_get_tokens(self):
+        resp = self.request_and_verify('buyer@example.com', 'login')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('access', resp.json())
+
+    def test_shop_access_tokens_are_short_lived(self):
+        resp = self.request_and_verify('buyer@example.com', 'login')
+        access = AccessToken(resp.json()['access'])
+        self.assertLessEqual(access['exp'] - access['iat'], 15 * 60)
