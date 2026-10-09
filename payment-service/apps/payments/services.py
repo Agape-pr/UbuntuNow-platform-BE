@@ -1,4 +1,5 @@
 import hashlib
+from urllib.parse import quote
 import requests
 import logging
 from datetime import datetime, timezone
@@ -214,6 +215,14 @@ class IntouchPayService:
             "password": self._hash_password(timestamp),
         }
 
+    def _callback_url_with_secret(self):
+        """The callback URL we give IntouchPay, carrying the webhook secret when one is configured."""
+        secret = getattr(settings, 'INTOUCH_WEBHOOK_SECRET', '')
+        if not secret or not self.callback_url:
+            return self.callback_url
+        separator = '&' if '?' in self.callback_url else '?'
+        return f"{self.callback_url}{separator}token={quote(secret, safe='')}"
+
     def request_payment(self, amount, mobile_phone, request_transaction_id):
         """
         Triggers a MoMo/Airtel push prompt on the payer's phone.
@@ -226,7 +235,7 @@ class IntouchPayService:
             "amount": float(amount),
             "mobilephone": mobile_phone,
             "requesttransactionid": request_transaction_id,
-            "callbackurl": self.callback_url,
+            "callbackurl": self._callback_url_with_secret(),
         }
         headers = {"Content-Type": "application/json"}
 

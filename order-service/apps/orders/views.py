@@ -1,6 +1,7 @@
 from rest_framework import viewsets, mixins, permissions, status, decorators
 from rest_framework.response import Response
 from django.db import transaction
+import logging
 import requests
 import os
 from .models import Order, OrderItem
@@ -8,6 +9,9 @@ from rest_framework.pagination import PageNumberPagination
 from .serializers import OrderSerializer, CheckoutSerializer, AdminOrderSerializer
 from shared.core.utils.internal import IsInternalService, internal_headers
 from shared.core.utils.admin_permissions import AdminPermission, VIEW_ORDERS
+
+logger = logging.getLogger(__name__)
+
 
 class OrderViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
@@ -20,7 +24,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         serializer = CheckoutSerializer(data=request.data)
         if not serializer.is_valid():
-            print(f"Checkout failed: Serializer validation errors: {serializer.errors}")
+            logger.info("Checkout rejected: invalid payload %s", serializer.errors)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         items_data = serializer.validated_data['items']
         delivery_address = serializer.validated_data.get('delivery_address')
@@ -36,15 +40,15 @@ class OrderViewSet(viewsets.ModelViewSet):
             try:
                 res = requests.get(f"{product_service_url}/api/v1/products/products/{product_id}/", timeout=5)
                 if res.status_code != 200:
-                    print(f"Checkout failed: Product {product_id} returned status {res.status_code}")
+                    logger.warning("Checkout failed: product %s returned status %s", product_id, res.status_code)
                     return Response({'error': f"Product {product_id} not found"}, status=status.HTTP_400_BAD_REQUEST)
                 product_data = res.json()
             except Exception as e:
-                print(f"Checkout failed: Exception calling product service: {e}")
+                logger.exception("Checkout failed: product-service unreachable")
                 return Response({'error': f"Failed to contact product service"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
             if product_data.get('stock_quantity', 0) < qty:
-                 print(f"Checkout failed: Insufficient stock for {product_data.get('name')}. Stock: {product_data.get('stock_quantity')}, Requested: {qty}")
+                 logger.info("Checkout rejected: insufficient stock for product %s (stock %s, requested %s)", product_id, product_data.get('stock_quantity'), qty)
                  return Response({'error': f"Insufficient stock for {product_data.get('name')}"}, status=status.HTTP_400_BAD_REQUEST)
             
             store_id = product_data.get('store_id') or product_data.get('store')
@@ -98,7 +102,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                             timeout=5
                         )
                     except Exception as e:
-                        print(f"Failed to deduct stock for {prod.get('id')}: {e}")
+                        logger.exception("Failed to deduct stock for product %s", prod.get('id'))
                 
                 orders.append(order)
                 
@@ -117,46 +121,10 @@ class OrderViewSet(viewsets.ModelViewSet):
                         }
                     )
                 except Exception as e:
-                    print(f"Failed to publish order created event: {e}")
+                    logger.exception("Failed to publish order.created event")
 
         result_serializer = OrderSerializer(orders, many=True)
         return Response(result_serializer.data, status=status.HTTP_201_CREATED)
-
-    @decorators.action(detail=True, methods=['post'], url_path='mock-payment')
-    def mock_payment(self, request, pk=None):
-        try:
-            order = self.get_queryset().get(pk=pk)
-        except Order.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-            
-        if order.payment_status != Order.PaymentStatus.PENDING:
-            return Response({'error': 'Order already paid or processed'}, status=status.HTTP_400_BAD_REQUEST)
-            
-        # Simulate payment success
-        order.payment_status = Order.PaymentStatus.HELD
-        order.status = Order.Status.SHIPPED # Move to SHIPPED immediately for testing
-        order.save()
-        
-        # Publish event for Notification Service
-        event_data = {
-            'order_id': order.id,
-            'buyer_id': order.buyer_id,
-            'store_id': order.store_id,
-            'total_amount': str(order.total_amount),
-            'status': order.status,
-            'payment_status': order.payment_status,
-        }
-        try:
-            from shared.core.events import publish_event
-            publish_event(
-                exchange='ubuntunow.events',
-                routing_key='order.payment.held',
-                message_dict=event_data
-            )
-        except Exception as e:
-            print(f"Failed to publish mock payment event: {e}")
-            
-        return Response({'status': 'mock payment successful', 'payment_status': order.payment_status})
 
     @decorators.action(detail=True, methods=['post'], url_path='confirm-receipt')
     def confirm_receipt(self, request, pk=None):
@@ -196,7 +164,7 @@ class SellerOrderViewSet(viewsets.ReadOnlyModelViewSet):
                     if store_data.get('id'):
                         store_id = store_data.get('id')
             except Exception as e:
-                print(f"Fallback store_id fetch failed: {e}")
+                logger.exception("Fallback store lookup failed")
                 
         if store_id:
             return Order.objects.filter(store_id=store_id).order_by('-created_at')
@@ -282,6 +250,6 @@ class InternalOrderViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
                     }
                 )
             except Exception as e:
-                print(f"Failed to publish payment event: {e}")
+                logger.exception("Failed to publish order.payment.held event")
 
         return Response({'status': 'updated'})

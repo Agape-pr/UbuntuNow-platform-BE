@@ -1,25 +1,24 @@
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
+import resend
 from django.conf import settings
 
 
 def send_otp_email(email: str, otp: str, purpose: str):
-    message = Mail(
-        from_email=(settings.SENDGRID_FROM_EMAIL, settings.SENDGRID_FROM_NAME),
-        to_emails=email,
-    )
+    resend.api_key = settings.RESEND_API_KEY
 
-    message.template_id = settings.SENDGRID_TEMPLATE_OTP_ID
-
-
-    message.dynamic_template_data = {
-        "otp": otp,
-        "purpose": purpose.replace("_", " ").title(),
-        "expiry_minutes": 5,
+    params = {
+        "from": f"{settings.RESEND_FROM_NAME} <{settings.RESEND_FROM_EMAIL}>",
+        "to": [email],
+        "template": {
+            "id": settings.RESEND_TEMPLATE_OTP_ID,
+            "variables": {
+                "otp": otp,
+                "purpose": purpose.replace("_", " ").title(),
+                "expiry_minutes": 5,
+            }
+        }
     }
 
     try:
-        sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
-        sg.send(message)
+        resend.Emails.send(params)
     except Exception as e:
-        raise RuntimeError(f"SendGrid error: {str(e)}")
+        raise RuntimeError(f"Resend error: {str(e)}")

@@ -8,9 +8,8 @@ router.register(r'seller/orders', SellerOrderViewSet, basename='seller-orders')
 router.register(r'admin/orders', AdminOrderViewSet, basename='admin-orders')
 router.register(r'internal', InternalOrderViewSet, basename='internal-orders')
 
-# We can alias checkout and mock-payment to avoid the 'orders/orders/' double prefix
+# We can alias checkout to avoid the 'orders/orders/' double prefix
 urlpatterns = [
     path('checkout/', OrderViewSet.as_view({'post': 'create'}), name='checkout'),
-    path('<int:pk>/mock-payment/', OrderViewSet.as_view({'post': 'mock_payment'}), name='mock-payment'),
     path('', include(router.urls)),
 ]

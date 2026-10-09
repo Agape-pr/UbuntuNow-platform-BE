@@ -1,0 +1,9 @@
+.git
+.agents
+.env
+**/__pycache__
+**/*.pyc
+**/*.sqlite3
+venv*/
+**/node_modules
+.DS_Store

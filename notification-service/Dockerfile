@@ -1,13 +1,17 @@
-FROM python:3.9-slim
+FROM python:3.12-slim
 
 WORKDIR /app
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y gcc libpq-dev netcat-traditional && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements from the root context
+COPY constraints.txt ./constraints.txt
 COPY notification-service/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt -c constraints.txt
 
 # Copy shared utilities to root so sys.path.append(ROOT_DIR.parent) works
 COPY shared /shared

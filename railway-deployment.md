@@ -75,3 +75,15 @@ Set these on the **API Gateway** service. All have safe defaults.
 - **Payment-service needs `AUTH_SERVICE_URL`** (e.g. `http://auth-service.railway.internal:8000`) so payouts can be written to the audit log. Without it, payouts still work but are not recorded.
 - **First super admin:** set `ADMIN_SETUP_SECRET` on auth-service, then `POST /api/v1/users/admin/setup/` with `{"email": "...", "secret": "..."}` for an existing registered account.
 - All services must share the same `DJANGO_SECRET_KEY` (they verify each other's JWTs) and `INTERNAL_SERVICE_TOKEN`.
+
+## 8. Runtime, security hardening and payment settings
+- **Python 3.12 / Django 5.2 LTS.** The images moved from Python 3.9 and Django 4.2 (both past end of life). Builds
+  install pinned versions from `constraints.txt`. Nothing to configure on Railway: it rebuilds from the Dockerfiles.
+- **IntouchPay callback secret (recommended before live keys).** Set `INTOUCH_WEBHOOK_SECRET` on payment-service
+  to a long random value. The callback URL given to IntouchPay then carries `?token=<secret>` and the webhook rejects
+  anything without it. Until it is set the webhook still works, but logs a warning on every callback.
+  Set it when no mobile-money payment is in flight, then run one sandbox payment to confirm the callback still arrives.
+- **Removed:** the `mock-payment` order endpoint (it let any buyer mark their own order paid).
+- **Payment status** is now only visible to the buyer who owns the order and to admins with `manage_payments`.
+- **OTP endpoints** answer identically whether or not an email has an account, and send at most one code per minute.
+- **Errors** returned to clients no longer include internal details; the details are in the service logs.

@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  services:
+    name: ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [auth, store, product, order, payment, notification]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/ci
+      DJANGO_SECRET_KEY: ci-only-secret-key-not-used-anywhere-else
+      INTERNAL_SERVICE_TOKEN: ci-only-internal-token
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            constraints.txt
+            ${{ matrix.service }}-service/requirements.txt
+      - name: Install dependencies (pinned)
+        run: pip install -r ${{ matrix.service }}-service/requirements.txt -c constraints.txt
+      - name: Django system check
+        working-directory: ${{ matrix.service }}-service
+        run: python manage.py check
+      - name: No missing migrations
+        working-directory: ${{ matrix.service }}-service
+        run: python manage.py makemigrations --check --dry-run
+      - name: Tests
+        working-directory: ${{ matrix.service }}-service
+        run: python manage.py test --noinput
+
+  gateway:
+    name: api-gateway
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api-gateway
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: api-gateway/package-lock.json
+      - run: npm ci
+      - run: npm test
+
+  dependency-audit:
+    name: dependency audit (informational)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Python packages
+        run: pip install pip-audit && pip-audit -r constraints.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Gateway packages
+        working-directory: api-gateway
+        run: npm ci && npm audit --omit=dev --audit-level=high

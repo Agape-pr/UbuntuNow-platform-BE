@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib.auth import get_user_model
 
 from rest_framework.generics import GenericAPIView
@@ -11,7 +13,15 @@ from apps.authentication.services.otp_service import create_email_otp
 User = get_user_model()
 
 
+logger = logging.getLogger(__name__)
+
+
 class SendEmailOTPView(GenericAPIView):
+    """
+    Always answers the same way, whether or not the email belongs to an account, so this
+    endpoint cannot be used to discover who is registered. A code is only actually sent when
+    the request makes sense for the account (and not more than once per cooldown).
+    """
     serializer_class = SendEmailOTPSerializer
     permission_classes = [AllowAny]
 
@@ -23,36 +33,19 @@ class SendEmailOTPView(GenericAPIView):
         purpose = serializer.validated_data["purpose"]
 
         user = User.objects.filter(email=email).first()
-
         if purpose == "register":
-            if not user:
-                return Response(
-                    {"detail": "User not found. Please register first."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            if user.is_active:
-                return Response(
-                    {"detail": "User already verified."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+            eligible = user is not None and not user.is_active
+        else:  # login / reset_password
+            eligible = user is not None and user.is_active
 
-        if purpose in ["login", "reset_password"] and not user:
-            return Response(
-                {"detail": "User does not exist."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        if eligible:
+            try:
+                create_email_otp(email=email, purpose=purpose, enforce_cooldown=True)
+            except Exception:
+                # Never let a delivery problem reveal that the account exists.
+                logger.exception("Could not send %s OTP", purpose)
 
-        create_email_otp(email=email, purpose=purpose)
-
-        # Return response matching frontend SendOTPResponse interface
-        return Response(
-            {
-                "email": email,
-                "purpose": purpose,
-            },
-            status=status.HTTP_200_OK,
-        )
-
+        return Response({"email": email, "purpose": purpose}, status=status.HTTP_200_OK)
 
 
 from rest_framework.generics import GenericAPIView
@@ -61,7 +54,7 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from apps.authentication.serializers.otp import ResendEmailOTPSerializer
-from apps.authentication.services.otp_service import resend_email_otp
+from apps.authentication.services.otp_service import NoPendingOTP, resend_email_otp
 
 
 class ResendEmailOTPView(GenericAPIView):
@@ -75,7 +68,11 @@ class ResendEmailOTPView(GenericAPIView):
         email = serializer.validated_data["email"]
         purpose = serializer.validated_data["purpose"]
 
-        resend_email_otp(email=email, purpose=purpose)
+        try:
+            resend_email_otp(email=email, purpose=purpose)
+        except NoPendingOTP:
+            # Same answer as a successful resend: don't reveal whether a code is pending.
+            pass
 
         # Return response matching frontend ResendOTPResponse interface
         return Response(

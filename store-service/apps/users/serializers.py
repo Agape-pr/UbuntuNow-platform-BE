@@ -1,8 +1,11 @@
+import logging
+
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import Store
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 class StoreSerializer(serializers.ModelSerializer):
     store_logo = serializers.SerializerMethodField()
@@ -71,5 +74,5 @@ class PublicStoreSerializer(serializers.ModelSerializer):
                     return data['results']
                 return data
         except Exception as e:
-            print(f"PublicStoreSerializer.get_products failed: {e}")
+            logger.warning("PublicStoreSerializer.get_products failed: %s", e)
         return []

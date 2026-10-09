@@ -1,3 +1,5 @@
+import logging
+
 from rest_framework import viewsets, permissions, filters
 from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
@@ -6,6 +8,9 @@ from .models import Product
 from .serializers import ProductSerializer, ProductCreateUpdateSerializer
 from shared.core.utils.internal import IsInternalService, internal_headers
 
+
+
+logger = logging.getLogger(__name__)
 
 
 class IsSeller(permissions.BasePermission):
@@ -19,12 +24,12 @@ class IsSeller(permissions.BasePermission):
         import requests as http_requests
 
         if not request.user or not request.user.is_authenticated:
-            print("IsSeller: rejected — user not authenticated")
+            logger.debug("IsSeller: rejected, user not authenticated")
             return False
 
         role = getattr(request.user, 'role', None)
         if role != 'seller':
-            print(f"IsSeller: rejected — user role is '{role}', not 'seller'")
+            logger.info("IsSeller: rejected, role is %r not 'seller'", role)
             return False
 
         # 1️⃣ Try store_id directly from the JWT StatelessUser object
@@ -33,13 +38,13 @@ class IsSeller(permissions.BasePermission):
 
         if store_id:
             request.store_id = store_id
-            print(f"IsSeller: approved — store_id={store_id} from JWT")
+            logger.debug("IsSeller: approved, store_id=%s from JWT", store_id)
             return True
 
         # 2️⃣ Fallback: JWT was issued before store was created OR store_id missing.
         #    Hit the store-service internal API to resolve it.
         user_id = getattr(request.user, 'id', None)
-        print(f"IsSeller: store_id missing in JWT for user {user_id} — attempting fallback fetch")
+        logger.info("IsSeller: store_id missing in JWT for user %s, looking it up", user_id)
 
         store_url = os.environ.get('STORE_SERVICE_URL', 'http://store-service:8002')
         try:
@@ -48,21 +53,21 @@ class IsSeller(permissions.BasePermission):
                 headers=internal_headers(),
                 timeout=3,
             )
-            print(f"IsSeller: store-service responded {res.status_code} — {res.text[:200]}")
+            logger.debug("IsSeller: store-service responded %s", res.status_code)
             if res.status_code == 200:
                 store_data = res.json()
                 # Must use Store.id (PK), NOT user_id — products are indexed by Store.id
                 store_id = store_data.get('id')
                 if store_id:
                     request.store_id = store_id
-                    print(f"IsSeller: approved via fallback — store_id={store_id} (Store.pk)")
+                    logger.debug("IsSeller: approved via fallback, store_id=%s", store_id)
                     return True
-                print(f"IsSeller: store-service returned no 'id' field: {store_data}")
+                logger.warning("IsSeller: store-service returned no id for user %s", user_id)
         except Exception as e:
-            print(f"IsSeller: fallback HTTP call failed — {e}")
+            logger.warning("IsSeller: store lookup failed: %s", e)
 
-        print(f"IsSeller: rejected — could not resolve store_id for user {user_id}. "
-              f"STORE_SERVICE_URL={store_url}. Seller must log out and log back in.")
+        logger.warning("IsSeller: rejected, could not resolve store_id for user %s (STORE_SERVICE_URL=%s). "
+                       "Seller must log out and log back in.", user_id, store_url)
         return False
 
 

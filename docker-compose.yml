@@ -1,4 +1,9 @@
-version: '3.8'
+# Local development stack. Run from the repository root:  docker compose up --build
+# Needs a .env file in this folder (see railway-deployment.md): at least DJANGO_SECRET_KEY and
+# INTERNAL_SERVICE_TOKEN, which must be the same for every service.
+#
+# Only the gateway is reachable from other machines. Everything else is bound to localhost
+# so databases and internal services are not exposed on your network.
 
 services:
   db:
@@ -7,10 +12,10 @@ services:
       - .env
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
       POSTGRES_MULTIPLE_DATABASES: auth_db,store_db,product_db,order_db,payment_db,notification_db
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init-multiple-databases.sh:/docker-entrypoint-initdb.d/init-multiple-databases.sh
@@ -23,8 +28,8 @@ services:
   rabbitmq:
     image: rabbitmq:3-management-alpine
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
     healthcheck:
       test: rabbitmq-diagnostics -q ping
       interval: 10s
@@ -32,7 +37,9 @@ services:
       retries: 5
 
   api-gateway:
-    build: ./api-gateway
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
     ports:
       - "8000:8000"
     depends_on:
@@ -53,15 +60,17 @@ services:
       - NOTIFICATION_SERVICE_URL=http://notification-service:8006
 
   auth-service:
-    build: ./auth-service
+    build:
+      context: .
+      dockerfile: auth-service/Dockerfile
     command: >
       sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8001"
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgres://postgres:password@db:5432/auth_db
+      - DATABASE_URL=postgres://postgres:${POSTGRES_PASSWORD:-password}@db:5432/auth_db
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
       - STORE_SERVICE_URL=http://store-service:8002
     depends_on:
@@ -71,16 +80,19 @@ services:
         condition: service_healthy
 
   store-service:
-    build: ./store-service
+    build:
+      context: .
+      dockerfile: store-service/Dockerfile
     command: >
       sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8002"
     ports:
-      - "8002:8002"
+      - "127.0.0.1:8002:8002"
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgres://postgres:password@db:5432/store_db
+      - DATABASE_URL=postgres://postgres:${POSTGRES_PASSWORD:-password}@db:5432/store_db
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - PRODUCT_SERVICE_URL=http://product-service:8003
     depends_on:
       db:
         condition: service_healthy
@@ -88,16 +100,19 @@ services:
         condition: service_healthy
 
   product-service:
-    build: ./product-service
+    build:
+      context: .
+      dockerfile: product-service/Dockerfile
     command: >
       sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8003"
     ports:
-      - "8003:8003"
+      - "127.0.0.1:8003:8003"
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgres://postgres:password@db:5432/product_db
+      - DATABASE_URL=postgres://postgres:${POSTGRES_PASSWORD:-password}@db:5432/product_db
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - STORE_SERVICE_URL=http://store-service:8002
     depends_on:
       db:
         condition: service_healthy
@@ -105,16 +120,20 @@ services:
         condition: service_healthy
 
   order-service:
-    build: ./order-service
+    build:
+      context: .
+      dockerfile: order-service/Dockerfile
     command: >
       sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8004"
     ports:
-      - "8004:8004"
+      - "127.0.0.1:8004:8004"
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgres://postgres:password@db:5432/order_db
+      - DATABASE_URL=postgres://postgres:${POSTGRES_PASSWORD:-password}@db:5432/order_db
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - PRODUCT_SERVICE_URL=http://product-service:8003
+      - STORE_SERVICE_URL=http://store-service:8002
     depends_on:
       db:
         condition: service_healthy
@@ -122,16 +141,21 @@ services:
         condition: service_healthy
 
   payment-service:
-    build: ./payment-service
+    build:
+      context: .
+      dockerfile: payment-service/Dockerfile
     command: >
       sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8005"
     ports:
-      - "8005:8005"
+      - "127.0.0.1:8005:8005"
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgres://postgres:password@db:5432/payment_db
+      - DATABASE_URL=postgres://postgres:${POSTGRES_PASSWORD:-password}@db:5432/payment_db
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - ORDER_SERVICE_URL=http://order-service:8004
+      - STORE_SERVICE_URL=http://store-service:8002
+      - AUTH_SERVICE_URL=http://auth-service:8001
     depends_on:
       db:
         condition: service_healthy
@@ -139,16 +163,19 @@ services:
         condition: service_healthy
 
   notification-service:
-    build: ./notification-service
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
     command: >
       sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8006"
     ports:
-      - "8006:8006"
+      - "127.0.0.1:8006:8006"
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgres://postgres:password@db:5432/notification_db
+      - DATABASE_URL=postgres://postgres:${POSTGRES_PASSWORD:-password}@db:5432/notification_db
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - STORE_SERVICE_URL=http://store-service:8002
     depends_on:
       db:
         condition: service_healthy
