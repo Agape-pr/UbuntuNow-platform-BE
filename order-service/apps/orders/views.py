@@ -218,17 +218,41 @@ class InternalOrderViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
 
     @decorators.action(detail=True, methods=['patch'], url_path='update-payment')
     def update_payment(self, request, pk=None):
-        try:
-            order = self.get_object()
-            payment_status = request.data.get('payment_status')
-            status_val = request.data.get('status')
-            
-            if payment_status:
-                order.payment_status = payment_status
-            if status_val:
-                order.status = status_val
-                
-            order.save()
-            return Response({'status': 'updated'})
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        order = self.get_object()
+        payment_status = request.data.get('payment_status')
+        status_val = request.data.get('status')
+
+        if payment_status and payment_status not in Order.PaymentStatus.values:
+            return Response({'error': f"Invalid payment_status '{payment_status}'"}, status=status.HTTP_400_BAD_REQUEST)
+        if status_val and status_val not in Order.Status.values:
+            return Response({'error': f"Invalid status '{status_val}'"}, status=status.HTTP_400_BAD_REQUEST)
+
+        newly_paid = payment_status == Order.PaymentStatus.PAID and order.payment_status != Order.PaymentStatus.PAID
+
+        if payment_status:
+            order.payment_status = payment_status
+        if status_val:
+            order.status = status_val
+        order.save()
+
+        if newly_paid:
+            # Notify buyer and seller (consumed by notification-service). The real payment
+            # webhooks land here, so this is where "payment secured" must be announced.
+            try:
+                from shared.core.events import publish_event
+                publish_event(
+                    exchange='ubuntunow.events',
+                    routing_key='order.payment.held',
+                    message_dict={
+                        'order_id': order.id,
+                        'buyer_id': order.buyer_id,
+                        'store_id': order.store_id,
+                        'total_amount': str(order.total_amount),
+                        'status': order.status,
+                        'payment_status': order.payment_status,
+                    }
+                )
+            except Exception as e:
+                print(f"Failed to publish payment event: {e}")
+
+        return Response({'status': 'updated'})

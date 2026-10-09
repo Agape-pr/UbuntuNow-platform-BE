@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 
 try:
     from shared.core.events import consume_events
+    from shared.core.utils.internal import internal_headers
 except ImportError:
     consume_events = None
 
@@ -57,8 +58,11 @@ class Command(BaseCommand):
                         import requests
                         store_service_url = os.environ.get('STORE_SERVICE_URL', 'http://store-service:8002')
                         try:
-                            # Assuming store-service has /api/v1/stores/{id}/
-                            res = requests.get(f"{store_service_url}/api/v1/stores/{store_id}/", timeout=5)
+                            res = requests.get(
+                                f"{store_service_url}/api/v1/users/internal/stores/by-id/{store_id}/",
+                                headers=internal_headers(),
+                                timeout=5,
+                            )
                             if res.status_code == 200:
                                 store_data = res.json()
                                 seller_id = store_data.get('user_id')

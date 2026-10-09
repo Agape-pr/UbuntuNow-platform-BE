@@ -8,6 +8,7 @@ from django.db import models
 class Order(models.Model):
     class Status(models.TextChoices):
         PENDING = 'pending', 'Pending'
+        CONFIRMED = 'confirmed', 'Confirmed'
         SHIPPED = 'shipped', 'Shipped'
         READY_FOR_PICKUP = 'ready_for_pickup', 'Ready for Pickup'
         COMPLETED = 'completed', 'Completed'
@@ -16,6 +17,8 @@ class Order(models.Model):
 
     class PaymentStatus(models.TextChoices):
         PENDING = 'pending', 'Pending'
+        PAID = 'paid', 'Paid'
+        FAILED = 'failed', 'Failed'
         HELD = 'held', 'Held (Escrow)'
         RELEASED = 'released', 'Released'
         REFUNDED = 'refunded', 'Refunded'
