@@ -94,14 +94,20 @@ const limiterOptions = {
 };
 const isWebhook = (req) => req.path.startsWith('/api/v1/payments/payment/webhook/');
 
-// Credential / OTP endpoints: login, register, OTP send/verify/resend.
+// Credential / OTP endpoints: login, admin login, register, OTP send/verify/resend.
 const authLimiter = rateLimit({
     ...limiterOptions,
     windowMs: 15 * 60 * 1000,
     limit: Number(process.env.RATE_LIMIT_AUTH || 30),
     skip: (req) => req.method === 'OPTIONS' || isWebhook(req),
 });
-app.use(['/api/v1/users/login', '/api/v1/users/register', '/api/v1/auth'], authLimiter);
+app.use([
+    '/api/v1/users/login',
+    '/api/v1/users/register',
+    '/api/v1/users/admin/login',
+    '/api/v1/users/admin/setup',
+    '/api/v1/auth',
+], authLimiter);
 
 // Everything else.
 app.use(rateLimit({

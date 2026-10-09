@@ -1,4 +1,4 @@
-from rest_framework import serializers
+from rest_framework import exceptions, serializers
 from django.contrib.auth import get_user_model
 import requests
 import os
@@ -147,6 +147,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token = super().get_token(user)
         # Add custom claims for RBAC
         token['role'] = user.role
+        token['email'] = user.email
         token['is_superuser'] = user.is_superuser
         token['admin_permissions'] = user.admin_permissions
         
@@ -165,7 +166,11 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
     def validate(self, attrs):
         data = super().validate(attrs)
-        
+
+        # Admins must use the admin portal (password + emailed code).
+        if self.user.role == 'admin':
+            raise exceptions.AuthenticationFailed('Admin accounts must sign in through the admin portal.')
+
         # Add user info to the response
         user_serializer = UserDetailSerializer(self.user)
         data['user'] = user_serializer.data
@@ -214,10 +219,11 @@ class AdminUserCreateSerializer(serializers.ModelSerializer):
         admin_permissions = validated_data.pop('admin_permissions', [])
         
         # When creating a user via Admin, they are verified immediately
+        email = validated_data.pop('email')
         user = User.objects.create_user(
-            email=validated_data['email'],
+            email=email,
             password=password,
-            username=validated_data['email'],
+            username=email,
             role=role,
             is_active=True,
             admin_permissions=admin_permissions,

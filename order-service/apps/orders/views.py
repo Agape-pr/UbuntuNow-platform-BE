@@ -4,8 +4,10 @@ from django.db import transaction
 import requests
 import os
 from .models import Order, OrderItem
-from .serializers import OrderSerializer, CheckoutSerializer
+from rest_framework.pagination import PageNumberPagination
+from .serializers import OrderSerializer, CheckoutSerializer, AdminOrderSerializer
 from shared.core.utils.internal import IsInternalService, internal_headers
+from shared.core.utils.admin_permissions import AdminPermission, VIEW_ORDERS
 
 class OrderViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
@@ -209,6 +211,33 @@ class SellerOrderViewSet(viewsets.ReadOnlyModelViewSet):
             order.save()
             return Response({'status': 'updated'})
         return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
+
+class AdminOrderPagination(PageNumberPagination):
+    page_size = 50
+    page_size_query_param = 'page_size'
+    max_page_size = 200
+
+
+class AdminOrderViewSet(viewsets.ReadOnlyModelViewSet):
+    """All orders, read-only, for admins with the view_orders permission.
+    Filters: ?status= &payment_status= &store_id= &buyer_id= &search=<order id>"""
+    permission_classes = [AdminPermission(VIEW_ORDERS)]
+    serializer_class = AdminOrderSerializer
+    pagination_class = AdminOrderPagination
+
+    def get_queryset(self):
+        qs = Order.objects.all().prefetch_related('items').order_by('-created_at')
+        params = self.request.query_params
+        for field in ('status', 'payment_status'):
+            if params.get(field):
+                qs = qs.filter(**{field: params[field]})
+        for field in ('store_id', 'buyer_id'):
+            if params.get(field, '').isdigit():
+                qs = qs.filter(**{field: int(params[field])})
+        if params.get('search', '').lstrip('#').isdigit():
+            qs = qs.filter(id=int(params['search'].lstrip('#')))
+        return qs
+
 
 class InternalOrderViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
     # Internal service-to-service communication only: retrieve + update-payment.

@@ -3,16 +3,16 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
+import hmac
 import os
 
 from .serializers import (
     UserRegistrationSerializer,
     UserDetailSerializer,
     CustomTokenObtainPairSerializer,
-    AdminUserSerializer,
-    AdminUserCreateSerializer,
 )
 from .models import User
+from . import audit
 from apps.authentication.services.otp_service import create_email_otp
 
 
@@ -50,63 +50,6 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
 
-# ── Admin Views ────────────────────────────────────────────────────────────────
-
-class AdminUserListView(generics.ListCreateAPIView):
-    """
-    GET /users/admin/users/
-    Requires is_staff=True. Filter by ?role=seller|buyer|admin, search by ?search=email
-    
-    POST /users/admin/users/
-    Creates a new user. Requires is_superuser=True.
-    """
-    permission_classes = [IsAdminUser]
-
-    def get_serializer_class(self):
-        if self.request.method == 'POST':
-            return AdminUserCreateSerializer
-        return AdminUserSerializer
-
-    def create(self, request, *args, **kwargs):
-        # Security Guard: Only superusers can create other admins or assign permissions
-        data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
-        role = data.get('role')
-        
-        # If trying to create an admin, ensure they are a superuser
-        if role == 'admin' and not request.user.is_superuser:
-            return Response(
-                {"error": "Only Super Admins can create new admin accounts."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-            
-        # Ensure non-superusers cannot assign admin_permissions
-        if 'admin_permissions' in data and not request.user.is_superuser:
-            data['admin_permissions'] = []
-            
-        serializer = self.get_serializer(data=data)
-        serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
-        headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
-
-    def get_queryset(self):
-        qs = User.objects.all().order_by('-date_joined')
-        role = self.request.query_params.get('role')
-        if role:
-            qs = qs.filter(role=role)
-        search = self.request.query_params.get('search')
-        if search:
-            qs = qs.filter(email__icontains=search)
-        return qs
-
-
-class AdminUserDetailView(generics.RetrieveAPIView):
-    """GET /users/admin/users/<id>/ — requires is_staff=True"""
-    serializer_class = AdminUserSerializer
-    permission_classes = [IsAdminUser]
-    queryset = User.objects.all()
-
-
 class AdminSetupView(APIView):
     """
     POST /users/admin/setup/
@@ -124,7 +67,7 @@ class AdminSetupView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE
             )
 
-        if request.data.get('secret', '') != expected_secret:
+        if not hmac.compare_digest(str(request.data.get('secret', '')).encode(), expected_secret.encode()):
             return Response({"error": "Invalid secret."}, status=status.HTTP_403_FORBIDDEN)
 
         email = request.data.get('email', '').strip()
@@ -140,6 +83,7 @@ class AdminSetupView(APIView):
         user.is_superuser = True
         user.role = 'admin'
         user.save()
+        audit.record(request, 'admin.setup', 'user', user.id, {'email': user.email}, actor=user)
 
         return Response({
             "success": True,

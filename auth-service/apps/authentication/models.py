@@ -7,6 +7,7 @@ class EmailOTP(models.Model):
         ("register", "Register"),
         ("login", "Login"),
         ("reset_password", "Reset Password"),
+        ("admin_login", "Admin Login"),
     )
 
     email = models.EmailField()

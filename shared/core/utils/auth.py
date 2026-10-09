@@ -9,9 +9,17 @@ class StatelessUser:
         self.id = token_payload.get('user_id')
         self.pk = self.id
         self.role = token_payload.get('role', 'buyer')
+        self.email = token_payload.get('email', '')
         self.is_authenticated = True
         self.is_active = True
+        # Admin identity comes from signed JWT claims (issued by auth-service).
+        self.is_superuser = bool(token_payload.get('is_superuser', False))
+        self.admin_permissions = list(token_payload.get('admin_permissions') or [])
         self.store = SimpleNamespace(id=token_payload.get('store_id')) if token_payload.get('store_id') else None
+
+    @property
+    def is_staff(self):
+        return self.role == 'admin'
 
     def getattr(self, item):
         return None

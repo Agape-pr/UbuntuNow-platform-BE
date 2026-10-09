@@ -6,8 +6,11 @@ import requests
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 from .models import Payment
+from rest_framework.pagination import LimitOffsetPagination
 from .serializers import PaymentSerializer, InitiatePaymentSerializer
 from shared.core.utils.internal import internal_headers
+from shared.core.utils.admin_permissions import AdminPermission, MANAGE_PAYMENTS
+from shared.core.utils.audit_client import record_audit
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +119,7 @@ class IntouchBalanceView(views.APIView):
     """
     Live IntouchPay merchant account balance, for the admin dashboard.
     """
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [AdminPermission(MANAGE_PAYMENTS)]
 
     def get(self, request):
         from .services import intouch_service
@@ -136,13 +139,34 @@ class ReleasablePaymentsView(generics.ListAPIView):
     funds to the seller.
     """
     serializer_class = PaymentSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [AdminPermission(MANAGE_PAYMENTS)]
     queryset = Payment.objects.filter(payment_status=Payment.Status.COMPLETED).order_by('-payment_date')
+
+class AdminPaymentPagination(LimitOffsetPagination):
+    default_limit = 50
+    max_limit = 200
+
+
+class AdminPaymentListView(generics.ListAPIView):
+    """All payments, newest first, for admins with manage_payments. ?status= &order_id="""
+    serializer_class = PaymentSerializer
+    permission_classes = [AdminPermission(MANAGE_PAYMENTS)]
+    pagination_class = AdminPaymentPagination
+
+    def get_queryset(self):
+        qs = Payment.objects.all().order_by('-payment_date', '-id')
+        params = self.request.query_params
+        if params.get('status'):
+            qs = qs.filter(payment_status=params['status'])
+        if params.get('order_id', '').isdigit():
+            qs = qs.filter(order_id=int(params['order_id']))
+        return qs
+
 
 class ReleasePaymentView(views.APIView):
     # Admin-triggered: pays out the seller's mobile money wallet via
     # IntouchPay's send_deposit (B2C push), then marks the payment RELEASED.
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [AdminPermission(MANAGE_PAYMENTS)]
 
     def post(self, request):
         payment_id = request.data.get('payment_id')
@@ -200,6 +224,10 @@ class ReleasePaymentView(views.APIView):
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         if not deposit_response.get('success'):
+            record_audit(request, 'payment.release.failed', 'payment', payment.id, {
+                'order_id': payment.order_id, 'amount': str(payment.payment_amount),
+                'message': deposit_response.get('message', 'Payout failed'),
+            })
             return Response(
                 {'error': deposit_response.get('message', 'Payout failed')},
                 status=status.HTTP_400_BAD_REQUEST
@@ -207,6 +235,10 @@ class ReleasePaymentView(views.APIView):
 
         payment.payment_status = Payment.Status.RELEASED
         payment.save()
+        record_audit(request, 'payment.release', 'payment', payment.id, {
+            'order_id': payment.order_id, 'amount': str(payment.payment_amount),
+            'transactionid': deposit_response.get('transactionid'),
+        })
         return Response({
             'status': 'released',
             'transactionid': deposit_response.get('transactionid'),

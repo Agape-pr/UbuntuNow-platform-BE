@@ -13,6 +13,10 @@ class OrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = ['id', 'store_id', 'total_amount', 'status', 'payment_status', 'delivery_address', 'items', 'created_at']
 
+class AdminOrderSerializer(OrderSerializer):
+    class Meta(OrderSerializer.Meta):
+        fields = OrderSerializer.Meta.fields + ['buyer_id', 'updated_at']
+
 class CheckoutItemSerializer(serializers.Serializer):
     product_id = serializers.IntegerField()
     quantity = serializers.IntegerField(min_value=1)

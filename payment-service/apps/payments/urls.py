@@ -5,6 +5,7 @@ from .views import (
     IntouchBalanceView,
     ReleasablePaymentsView,
     ReleasePaymentView,
+    AdminPaymentListView,
     PesapalIPNWebhookView,
     IntouchWebhookView,
 )
@@ -15,6 +16,7 @@ urlpatterns = [
     path('payment/intouch-balance', IntouchBalanceView.as_view(), name='intouch-balance'),
     path('payment/releasable', ReleasablePaymentsView.as_view(), name='payment-releasable'),
     path('payment/release', ReleasePaymentView.as_view(), name='payment-release'),
+    path('payment/admin/list', AdminPaymentListView.as_view(), name='payment-admin-list'),
     path('payment/webhook/pesapal/', PesapalIPNWebhookView.as_view(), name='pesapal-webhook'),
     path('payment/webhook/intouch/', IntouchWebhookView.as_view(), name='intouch-webhook'),
 ]

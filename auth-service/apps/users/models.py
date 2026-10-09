@@ -48,3 +48,21 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f"Profile for {self.user.email}"
+
+
+class AuditLog(models.Model):
+    """Append-only trail of admin and other sensitive actions across the marketplace."""
+    actor_id = models.IntegerField(null=True, blank=True, db_index=True)
+    actor_email = models.CharField(max_length=254, blank=True)
+    action = models.CharField(max_length=64, db_index=True)
+    target_type = models.CharField(max_length=32, blank=True)
+    target_id = models.CharField(max_length=64, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    ip_address = models.CharField(max_length=100, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+    def __str__(self):
+        return f"{self.created_at:%Y-%m-%d %H:%M} {self.actor_email or self.actor_id} {self.action}"

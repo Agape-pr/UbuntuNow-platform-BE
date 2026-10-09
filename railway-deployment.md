@@ -68,3 +68,10 @@ Set these on the **API Gateway** service. All have safe defaults.
 | `RATE_LIMIT_AUTH` | `30` | Max login/register/OTP requests per IP per 15 min. |
 | `RATE_LIMIT_GENERAL` | `1000` | Max other requests per IP per 15 min. Payment webhooks and `/health` are never limited. |
 | `MAX_BODY_MB` | `25` | Max request body size. |
+
+## 7. Admin portal (admin.ubuntunow.rw) — backend notes
+- **Admin sign-in** is two-step: password, then a 6-digit code emailed to the admin (`/users/admin/login` → `/users/admin/login/verify`). The normal `/users/login` refuses admin accounts. Admin access tokens last 10 minutes, and the session 8 hours.
+- **Permissions** (enforced on the server): `manage_users`, `manage_sellers`, `view_orders`, `manage_payments`, `view_audit_log`. Only super admins can create, edit or remove admins.
+- **Payment-service needs `AUTH_SERVICE_URL`** (e.g. `http://auth-service.railway.internal:8000`) so payouts can be written to the audit log. Without it, payouts still work but are not recorded.
+- **First super admin:** set `ADMIN_SETUP_SECRET` on auth-service, then `POST /api/v1/users/admin/setup/` with `{"email": "...", "secret": "..."}` for an existing registered account.
+- All services must share the same `DJANGO_SECRET_KEY` (they verify each other's JWTs) and `INTERNAL_SERVICE_TOKEN`.
