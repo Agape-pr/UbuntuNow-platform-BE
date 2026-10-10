@@ -35,8 +35,10 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
-    'cloudinary_storage',
     'django.contrib.staticfiles',
+    # Must stay AFTER staticfiles: its collectstatic override reads the removed
+    # settings.STATICFILES_STORAGE and crashes on Django >= 5.1. Only media uses Cloudinary.
+    'cloudinary_storage',
     'cloudinary',
     'rest_framework',
     'rest_framework_simplejwt',

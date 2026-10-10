@@ -54,6 +54,19 @@ jobs:
       - name: Tests
         working-directory: ${{ matrix.service }}-service
         run: python manage.py test --noinput
+      # The next two reproduce what the production container does at startup, so a dependency
+      # upgrade that breaks collectstatic or the production settings fails here, not on Railway.
+      - name: Collect static files (as in production)
+        working-directory: ${{ matrix.service }}-service
+        run: python manage.py collectstatic --noinput
+      - name: Production settings load and migrate
+        working-directory: ${{ matrix.service }}-service
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.prod
+          DJANGO_ALLOWED_HOSTS: "*"
+        run: |
+          python manage.py check
+          python manage.py migrate --noinput
 
   gateway:
     name: api-gateway
